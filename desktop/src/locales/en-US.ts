@@ -106,6 +106,7 @@ export default {
 			recordDuration: "Record Duration",
 			videoDuration: "Video Duration",
 			speed: "Speed",
+			segments: "Segments",
 			postprocess: "Post-process",
 			actions: "Actions",
 		},

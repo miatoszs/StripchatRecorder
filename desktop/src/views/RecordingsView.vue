@@ -697,7 +697,7 @@
 
 		<header
 			ref="headerEl"
-			class="flex items-start justify-between gap-4 shrink-0 pb-4 bg-background sticky top-0 z-20"
+			class="flex items-start justify-between gap-4 shrink-0 pb-4 bg-background sticky top-0 z-20 -mx-6 px-6 shadow-[0_-1.5rem_0_0_var(--background)]"
 		>
 			<div class="flex-1 min-w-0">
 				<h1 class="text-xl font-bold mb-0.5">{{ t("recordings.title") }}</h1>

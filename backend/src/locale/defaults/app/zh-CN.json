@@ -266,6 +266,16 @@
       "changeConfirm": "确认",
       "changeDone": "输出目录已更新，将在下次录制时生效"
     },
+    "tmpDir": {
+      "label": "临时分片目录（留空则与输出目录相同）",
+      "placeholder": "/tmp/recordings_tmp",
+      "hint": "录制产生的临时 .ts 分片文件存放位置。可以指定到高速磁盘以提升录制效率，留空表示与输出目录相同。修改后按回车或点击其他区域确认。",
+      "sameAsOutput": "（与输出目录相同）",
+      "changeTitle": "修改临时分片目录",
+      "changeMessage": "将临时分片目录改为：\n{dir}\n\n此更改将在下次录制时生效。",
+      "changeConfirm": "确认",
+      "changeDone": "临时分片目录已更新，将在下次录制时生效"
+    },
     "maxConcurrent": {
       "label": "最大并发录制数",
       "hint": "0 表示不限制"

@@ -18,6 +18,8 @@ import { call, on } from "@/lib/api";
 export interface Settings {
 	/** 录制文件输出目录 / Recording output directory */
 	output_dir: string;
+	/** 临时分片目录（空/null 表示与 output_dir 相同）/ Temporary segment directory (empty/null means same as output_dir) */
+	tmp_dir: string | null;
 	/** 主播状态轮询间隔（秒）/ Streamer status poll interval (seconds) */
 	poll_interval_secs: number;
 	/** 是否默认开启自动录制 / Whether auto-record is enabled by default */
@@ -58,6 +60,7 @@ export const useSettingsStore = defineStore("settings", () => {
 	/** 当前设置值 / Current settings values */
 	const settings = ref<Settings>({
 		output_dir: "",
+		tmp_dir: null,
 		poll_interval_secs: 30,
 		auto_record: true,
 		api_proxy_url: null,

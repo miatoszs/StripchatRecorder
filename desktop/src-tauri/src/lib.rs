@@ -273,12 +273,14 @@ async fn setup_app(app_handle: tauri::AppHandle) {
     {
         let settings = app_state.get_settings();
         let output_path_buf = std::path::PathBuf::from(&settings.output_dir);
+        let tmp_path_buf = settings.tmp_dir.as_deref().filter(|s| !s.is_empty()).map(std::path::PathBuf::from);
         let merge_format = settings.merge_format.clone();
         let emitter_blocking = Arc::clone(&emitter);
         let recorder_blocking = Arc::clone(&recorder);
         tokio::task::spawn_blocking(move || {
             stripchat_recorder_lib::recording::recorder::startup_merge_leftover_segments(
                 output_path_buf.as_path(),
+                tmp_path_buf.as_deref(),
                 &merge_format,
                 &emitter_blocking,
                 &recorder_blocking,

@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 const DESCRIBE: &str = r#"{
     "id": "notify_discord",
-    "name": "Discord 通知 0.2.0",
+    "name": "Discord 通知 0.3.0",
     "description": "将录制信息和封面图发送到 Discord Webhook",
     "params": [
         {

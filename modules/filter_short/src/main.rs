@@ -22,7 +22,7 @@ use std::path::PathBuf;
 /// Module metadata JSON, output via `--describe` argument.
 const DESCRIBE: &str = r#"{
     "id": "filter_short",
-    "name": "过滤短视频 0.2.0",
+    "name": "过滤短视频 0.3.0",
     "description": "删除时长低于指定阈值的视频文件",
     "params": [
         {

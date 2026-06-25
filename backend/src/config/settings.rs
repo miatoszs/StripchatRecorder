@@ -97,6 +97,9 @@ pub struct Settings {
     /// Mouflon Keys sync Worker auth token (corresponds to Worker's AUTH_TOKEN env var)
     #[serde(default)]
     pub mouflon_sync_token: Option<String>,
+    /// 临时分片目录（None 表示与 output_dir 相同）/ Temporary segment directory (None means same as output_dir)
+    #[serde(default)]
+    pub tmp_dir: Option<String>,
     /// 首次启动向导是否已完成（false = 显示 Setup 页面）
     /// Whether the first-launch setup wizard has been completed (false = show Setup page)
     #[serde(default)]
@@ -145,6 +148,7 @@ impl Default for Settings {
 
         Self {
             output_dir,
+            tmp_dir: None,
             poll_interval_secs: 30,
             auto_record: true,
             api_proxy_url: None,
@@ -262,6 +266,9 @@ impl AppState {
         let data = AppData { settings, streamers, mouflon_keys, pipeline, pp_results };
 
         fs::create_dir_all(&data.settings.output_dir)?;
+        if let Some(ref tmp) = data.settings.tmp_dir {
+            fs::create_dir_all(tmp)?;
+        }
 
         Ok(Arc::new(Self {
             data: RwLock::new(data),
@@ -309,6 +316,9 @@ impl AppState {
     /// If mouflon_sync_url or mouflon_sync_token changed, notify the sync scheduler to trigger immediately.
     pub fn update_settings(&self, settings: Settings) -> Result<()> {
         fs::create_dir_all(&settings.output_dir)?;
+        if let Some(ref tmp) = settings.tmp_dir {
+            fs::create_dir_all(tmp)?;
+        }
         let old = self.data.read().settings.clone();
         let poll_interval_changed = old.poll_interval_secs != settings.poll_interval_secs;
         let mouflon_sync_changed = old.mouflon_sync_url != settings.mouflon_sync_url
@@ -778,24 +788,41 @@ pub async fn schedule_mouflon_sync(
 ) {
     use crate::core::emitter::EmitterExt;
     const INTERVAL: tokio::time::Duration = tokio::time::Duration::from_secs(3600);
+    // 失败后的重试间隔（5 分钟），最多重试 3 次
+    // Retry interval after failure (5 minutes), up to 3 retries
+    const RETRY_INTERVAL: tokio::time::Duration = tokio::time::Duration::from_secs(300);
+    const MAX_RETRIES: u32 = 3;
 
     loop {
         let settings = state.get_settings();
         if let Some(url) = settings.mouflon_sync_url.as_deref().filter(|u| !u.is_empty()) {
-            let token = settings.mouflon_sync_token.as_deref();
-            match state.sync_mouflon_keys_from_worker(url, token).await {
-                Ok(true) => {
-                    tracing::info!("Mouflon keys synced from {}", url);
-                    emitter.emit(
-                        "mouflon-keys-updated",
-                        &state.get_mouflon_keys_store(),
-                    );
-                }
-                Ok(false) => {
-                    tracing::debug!("Mouflon keys up-to-date, skipped");
-                }
-                Err(e) => {
-                    tracing::warn!("Mouflon keys sync failed: {}", e);
+            let token = settings.mouflon_sync_token.clone();
+            let url = url.to_string();
+            let mut attempt = 0u32;
+            loop {
+                match state.sync_mouflon_keys_from_worker(&url, token.as_deref()).await {
+                    Ok(true) => {
+                        tracing::info!("Mouflon keys synced from {}", url);
+                        emitter.emit(
+                            "mouflon-keys-updated",
+                            &state.get_mouflon_keys_store(),
+                        );
+                        break;
+                    }
+                    Ok(false) => {
+                        tracing::debug!("Mouflon keys up-to-date, skipped");
+                        break;
+                    }
+                    Err(e) => {
+                        attempt += 1;
+                        if attempt >= MAX_RETRIES {
+                            tracing::warn!("Mouflon keys sync failed after {} attempts: {:?}", attempt, e);
+                            break;
+                        }
+                        tracing::warn!("Mouflon keys sync failed (attempt {}/{}): {:?}, retrying in {}s",
+                            attempt, MAX_RETRIES, e, RETRY_INTERVAL.as_secs());
+                        tokio::time::sleep(RETRY_INTERVAL).await;
+                    }
                 }
             }
         }
@@ -803,7 +830,11 @@ pub async fn schedule_mouflon_sync(
         // Wait 1 hour, or until an immediate sync notification arrives
         tokio::select! {
             _ = tokio::time::sleep(INTERVAL) => {}
-            _ = notify_rx.recv() => {
+            v = notify_rx.recv() => {
+                if v.is_none() {
+                    // 发送端已关闭，退出调度器 / Sender dropped, exit scheduler
+                    break;
+                }
                 tracing::info!("Mouflon sync: settings changed, triggering immediate sync");
             }
         }

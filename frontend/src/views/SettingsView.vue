@@ -71,6 +71,7 @@
 	/** 表单响应式数据（与 store.settings 保持同步）/ Reactive form data (synced with store.settings) */
 	const form = reactive<Settings>({
 		output_dir: "",
+		tmp_dir: null,
 		poll_interval_secs: 30,
 		auto_record: true,
 		api_proxy_url: null,
@@ -88,6 +89,7 @@
 	// 保存各代理字段的原始值，用于检测是否有实际变更
 	// Store original values for proxy fields to detect actual changes
 	const originalOutputDir = ref("");
+	const originalTmpDir = ref<string | null>(null);
 	const originalApiProxy = ref<string | null>(null);
 	const originalCdnProxy = ref<string | null>(null);
 	const originalScMirror = ref<string | null>(null);
@@ -103,6 +105,7 @@
 		await store.fetchSettings();
 		Object.assign(form, store.settings);
 		originalOutputDir.value = form.output_dir;
+		originalTmpDir.value = form.tmp_dir;
 		originalApiProxy.value = form.api_proxy_url;
 		originalCdnProxy.value = form.cdn_proxy_url;
 		originalScMirror.value = form.sc_mirror_url;
@@ -153,6 +156,7 @@
 			initialized = false;
 			Object.assign(form, newSettings);
 			originalOutputDir.value = newSettings.output_dir;
+			originalTmpDir.value = newSettings.tmp_dir;
 			originalApiProxy.value = newSettings.api_proxy_url;
 			originalCdnProxy.value = newSettings.cdn_proxy_url;
 			originalScMirror.value = newSettings.sc_mirror_url;
@@ -209,6 +213,27 @@
 		} else {
 			// 用户取消时恢复原始值 / Restore original value if user cancels
 			form.output_dir = originalOutputDir.value;
+		}
+	}
+
+	/**
+	 * 保存临时分片目录（需要用户确认，因为会影响正在进行的录制）。
+	 * Save the temporary segment directory (requires user confirmation as it affects ongoing recordings).
+	 */
+	async function saveTmpDir() {
+		if (!initialized) return;
+		if (form.tmp_dir === originalTmpDir.value) return;
+		const ok = await confirm({
+			title: t("settings.tmpDir.changeTitle"),
+			message: t("settings.tmpDir.changeMessage", { dir: form.tmp_dir || t("settings.tmpDir.sameAsOutput") }),
+			confirmText: t("settings.tmpDir.changeConfirm"),
+		});
+		if (ok) {
+			await store.saveSettings({ ...form });
+			originalTmpDir.value = form.tmp_dir;
+			toast(t("settings.tmpDir.changeDone"), "info");
+		} else {
+			form.tmp_dir = originalTmpDir.value;
 		}
 	}
 
@@ -338,6 +363,21 @@
 					/>
 					<p class="text-xs text-muted-foreground">
 						{{ t("settings.outputDir.hint") }}
+					</p>
+				</div>
+
+				<div class="flex flex-col gap-1.5">
+					<Label>{{ t("settings.tmpDir.label") }}</Label>
+					<Input
+						:model-value="form.tmp_dir ?? ''"
+						:placeholder="t('settings.tmpDir.placeholder')"
+						autocomplete="off"
+						@update:model-value="form.tmp_dir = ($event as string) || null"
+						@keyup.enter="saveTmpDir"
+						@blur="saveTmpDir"
+					/>
+					<p class="text-xs text-muted-foreground">
+						{{ t("settings.tmpDir.hint") }}
 					</p>
 				</div>
 

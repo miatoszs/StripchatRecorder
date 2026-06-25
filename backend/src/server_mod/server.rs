@@ -867,12 +867,14 @@ pub async fn run_server(port: u16) {
     {
         let settings = app_state.get_settings();
         let output_dir = std::path::PathBuf::from(&settings.output_dir);
+        let tmp_dir = settings.tmp_dir.as_deref().filter(|s| !s.is_empty()).map(std::path::PathBuf::from);
         let merge_format = settings.merge_format.clone();
         let emitter_clone = Arc::clone(&emitter);
         let recorder_clone = Arc::clone(&recorder);
         tokio::task::spawn_blocking(move || {
             crate::recording::recorder::startup_merge_leftover_segments(
                 &output_dir,
+                tmp_dir.as_deref(),
                 &merge_format,
                 &emitter_clone,
                 &recorder_clone,

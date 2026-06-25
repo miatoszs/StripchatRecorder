@@ -106,6 +106,7 @@ export default {
 			recordDuration: "录制时长",
 			videoDuration: "视频时长",
 			speed: "录制速度",
+			segments: "分片",
 			postprocess: "后处理",
 			actions: "操作",
 		},

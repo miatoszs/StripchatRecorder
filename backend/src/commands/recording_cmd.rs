@@ -27,6 +27,10 @@ pub struct RecordingFile {
     pub pp_results: Option<Vec<crate::recording::meta::PpModuleResult>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub module_outputs: Option<std::collections::HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segments_downloaded: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segments_failed: Option<u64>,
 }
 
 /// 录制文件列表查询的核心实现（同步，在阻塞线程中调用）。
@@ -47,6 +51,7 @@ pub fn list_recordings_inner(
     let waiting_merging = recorder.waiting_merge_dirs.read().clone();
     let all_merging: std::collections::HashSet<PathBuf> =
         merging.union(&waiting_merging).cloned().collect();
+    let live_segment_stats = recorder.segment_stats.read().clone();
 
     let mut files: Vec<RecordingFile> = Vec::new();
 
@@ -56,6 +61,7 @@ pub fn list_recordings_inner(
         &sessions,
         &all_merging,
         &settings.merge_format,
+        &live_segment_stats,
     )?;
 
     files.sort_by(|a, b| b.started_at.cmp(&a.started_at));
@@ -68,6 +74,7 @@ fn collect_from_meta(
     sessions: &[(PathBuf, chrono::DateTime<chrono::Utc>)],
     merging: &std::collections::HashSet<PathBuf>,
     merge_format: &str,
+    live_segment_stats: &std::collections::HashMap<String, (u64, u64)>,
 ) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
@@ -78,7 +85,7 @@ fn collect_from_meta(
             if name.starts_with('.') || merging.contains(&path) {
                 continue;
             }
-            collect_from_meta(&path, files, sessions, merging, merge_format)?;
+            collect_from_meta(&path, files, sessions, merging, merge_format, live_segment_stats)?;
         } else if path.is_file() {
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if !name.starts_with('.') || !name.ends_with(".json") {
@@ -124,6 +131,8 @@ fn collect_from_meta(
                     status: Some(meta.status),
                     pp_results: meta.pp_results,
                     module_outputs: meta.module_outputs,
+                    segments_downloaded: meta.segments_downloaded,
+                    segments_failed: meta.segments_failed,
                 });
             } else {
                 let session_dir = path.parent().unwrap_or(dir).join(stem);
@@ -137,9 +146,16 @@ fn collect_from_meta(
                     let size_bytes = crate::recording::recorder::dir_size_bytes(&session_dir)
                         .unwrap_or(0);
 
+                    // 从管理器中读取实时分片统计 / Read real-time segment stats from manager
+                    let vpath_str = video_path.to_string_lossy().to_string();
+                    let (seg_dl, seg_fail) = live_segment_stats
+                        .get(&vpath_str)
+                        .copied()
+                        .unwrap_or((0, 0));
+
                     files.push(RecordingFile {
                         name: format!("{}.{}", stem, merge_format),
-                        path: video_path.to_string_lossy().to_string(),
+                        path: vpath_str,
                         size_bytes,
                         started_at: local.to_rfc3339(),
                         is_recording: true,
@@ -148,6 +164,8 @@ fn collect_from_meta(
                         status: Some("recording".to_string()),
                         pp_results: None,
                         module_outputs: None,
+                        segments_downloaded: Some(seg_dl),
+                        segments_failed: Some(seg_fail),
                     });
                 } else {
                     files.push(RecordingFile {
@@ -161,6 +179,8 @@ fn collect_from_meta(
                         status: Some(meta.status),
                         pp_results: meta.pp_results,
                         module_outputs: meta.module_outputs,
+                        segments_downloaded: meta.segments_downloaded,
+                        segments_failed: meta.segments_failed,
                     });
                 }
             }

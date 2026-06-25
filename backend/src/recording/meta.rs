@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 /// Current meta file format version.
 /// Increment this whenever a breaking change is made to `VideoMeta`;
 /// the periodic scanner will rebuild any meta file whose version doesn't match.
-pub const META_VERSION: u32 = 2;
+pub const META_VERSION: u32 = 4;
 
 /// 从文件名 stem（格式：`{name}_{YYYYMMDD}_{HHmmss}`）中解析录制开始时间。
 /// Parse the recording start time from a filename stem (format: `{name}_{YYYYMMDD}_{HHmmss}`).
@@ -98,6 +98,14 @@ pub struct VideoMeta {
     /// 模块输出路径（模块 ID -> 输出文件路径）/ Module output paths (module ID -> output file path)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub module_outputs: Option<std::collections::HashMap<String, String>>,
+
+    /// 累计成功下载的分片数（录制完成后持久化）/ Total successfully downloaded segments (persisted after recording ends)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segments_downloaded: Option<u64>,
+
+    /// 累计下载失败的分片数（录制完成后持久化）/ Total failed segment downloads (persisted after recording ends)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segments_failed: Option<u64>,
 }
 
 /// 根据视频文件路径计算对应的元数据文件路径（`.{stem}.json`）。
@@ -177,10 +185,27 @@ pub fn set_status(video_path: &Path, status: &str) {
                 video_duration_secs: None,
                 pp_results: None,
                 module_outputs: None,
+                segments_downloaded: None,
+                segments_failed: None,
             }
         }
     };
     meta.status = status.to_string();
+    write_meta(video_path, &meta);
+}
+
+/// 录制完成时更新 meta 的分片统计字段（downloaded/failed）。
+/// 若 meta 文件不存在则不操作。
+///
+/// Update segment statistics in the meta file when recording finishes.
+/// Does nothing if the meta file doesn't exist.
+pub fn set_segment_stats(video_path: &Path, downloaded: u64, failed: u64) {
+    let mut meta = match read_meta(video_path) {
+        Some(m) => m,
+        None => return,
+    };
+    meta.segments_downloaded = Some(downloaded);
+    meta.segments_failed = Some(failed);
     write_meta(video_path, &meta);
 }
 
@@ -215,6 +240,8 @@ pub fn set_pp_done(
                 video_duration_secs: None,
                 pp_results: None,
                 module_outputs: None,
+                segments_downloaded: None,
+                segments_failed: None,
             }
         }
     };
@@ -243,6 +270,8 @@ pub fn ensure_meta(video_path: &Path, started_at: &str) {
         video_duration_secs: None,
         pp_results: None,
         module_outputs: None,
+        segments_downloaded: None,
+        segments_failed: None,
     };
     write_meta(video_path, &meta);
 }
@@ -337,6 +366,8 @@ fn scan_and_ensure_meta(
                         video_duration_secs,
                         pp_results: None,
                         module_outputs: None,
+                        segments_downloaded: None,
+                        segments_failed: None,
                     };
                     write_meta(&path, &meta);
                     *count_created += 1;
