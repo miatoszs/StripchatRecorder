@@ -4047,7 +4047,7 @@ dependencies = [
 
 [[package]]
 name = "stripchat-recorder"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-stream",
  "axum",
@@ -4075,7 +4075,7 @@ dependencies = [
 
 [[package]]
 name = "stripchat-recorder-desktop"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
  "parking_lot",
