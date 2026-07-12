@@ -25,7 +25,6 @@ export interface StreamerEntry {
 	is_recording: boolean;
 	/** 是否可录制（直播间是否公开可访问）/ Whether the stream is recordable (publicly accessible) */
 	is_recordable: boolean;
-	viewers: number;
 	/** 直播间状态文字（如"公开秀"）/ Stream status text (e.g. "公开秀") */
 	status: string;
 	thumbnail_url: string | null;
@@ -39,7 +38,6 @@ export interface StatusUpdatePayload {
 	is_online: boolean;
 	is_recording: boolean;
 	is_recordable: boolean;
-	viewers: number;
 	status: string;
 	thumbnail_url: string | null;
 }
@@ -201,7 +199,6 @@ export const useStreamersStore = defineStore("streamers", () => {
 						is_online: p.is_online,
 						is_recording: isStopping ? false : p.is_recording,
 						is_recordable: isStopping ? s.is_recordable : p.is_recordable,
-						viewers: p.viewers,
 						status: p.status,
 						// 仅在有新缩略图时更新，避免清空已有缩略图
 						// Only update thumbnail if a new one is provided

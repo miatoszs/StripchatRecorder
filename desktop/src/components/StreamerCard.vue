@@ -25,7 +25,7 @@
 	import { Label } from "@/components/ui/label";
 	import { ref, watch, computed } from "vue";
 	import { useFastThumbnail } from "@/composables/useFastThumbnail";
-	import { X, Circle, Eye } from "@lucide/vue";
+	import { X, Circle } from "@lucide/vue";
 	import { useI18n } from "vue-i18n";
 
 	const props = defineProps<{ streamer: StreamerEntry }>();
@@ -105,12 +105,6 @@
 					{{ streamer.is_online ? streamer.status : t("streamerCard.offline") }}
 				</Badge>
 				<Badge v-if="streamer.is_recording" variant="destructive">{{ t("streamerCard.recording") }}</Badge>
-				<span
-					v-if="streamer.is_online && streamer.viewers > 0"
-					class="text-xs text-muted-foreground flex items-center gap-1"
-				>
-					<Eye class="size-3" /> {{ streamer.viewers.toLocaleString() }}
-				</span>
 			</div>
 
 			<div class="flex items-center gap-2 mt-0.5">

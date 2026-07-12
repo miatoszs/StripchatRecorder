@@ -53,7 +53,6 @@ pub async fn list_streamers(state: State<'_, DesktopState>) -> CmdResult<serde_j
                 "is_online": status.as_ref().map(|st| st.is_online).unwrap_or(false),
                 "is_recording": state.recorder.is_recording(&s.username),
                 "is_recordable": status.as_ref().map(|st| st.is_recordable).unwrap_or(false),
-                "viewers": status.as_ref().map(|st| st.viewers).unwrap_or(0),
                 "status": status.as_ref().map(|st| st.status.clone()).unwrap_or_default(),
                 "thumbnail_url": status.and_then(|st| st.thumbnail_url),
             })

@@ -128,7 +128,7 @@ fn default_language() -> String {
 
 /// Server 端口的默认值 / Default value for server port
 fn default_server_port() -> u16 {
-    3030
+    30301
 }
 
 /// 返回可执行文件所在目录，用于定位配置文件和模块目录。

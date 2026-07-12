@@ -8,49 +8,40 @@
 //! Also embeds frontend static assets (compiled into the binary via rust-embed).
 
 use crate::config::settings::AppState;
-use crate::core::emitter::{BroadcastEmitter, EmitterExt, Event};
+use crate::core::emitter::{BroadcastEmitter, Event};
 use crate::recording::recorder::RecorderManager;
 use crate::relay::handler::{RelayState, relay_sessions, stop_relay_handler, stream_handler};
 use crate::relay::state::RelayManager;
-use crate::streaming::monitor::StatusMonitor;
-use axum::extract::Query;
-use axum::{
-    Json, Router,
-    extract::{Path, State as AxumState},
-    http::{StatusCode, Uri, header},
-    response::{
-        IntoResponse, Response,
-        sse::{self, Sse},
+use crate::server_mod::routes::{
+    locale::{get_locale_handler, list_locales_handler},
+    postprocess::{
+        cancel_postprocess, get_module_outputs, get_pipeline, get_postprocess_tasks, list_modules,
+        run_postprocess, run_postprocess_batch, save_pipeline,
     },
+    recording::{
+        delete_recording, get_merging_dirs_handler, list_recordings, open_output_dir,
+        open_recording, serve_output_file,
+    },
+    settings::{
+        add_mouflon_key, get_disk_space_handler, get_settings, get_startup_warnings_handler,
+        list_mouflon_keys, remove_missing_pp_results_handler, remove_mouflon_key, save_settings,
+        sync_mouflon_keys,
+    },
+    streamer::{
+        add_streamer, list_streamers, remove_streamer, set_auto_record, start_recording,
+        stop_recording, verify_streamer,
+    },
+};
+use crate::server_mod::sse::sse_handler;
+use crate::server_mod::static_files::static_handler;
+use crate::streaming::monitor::StatusMonitor;
+use axum::{
+    Router,
     routing::{delete, get, post},
 };
-use rust_embed::RustEmbed;
-use serde::Deserialize;
-use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
-
-/// Embedded frontend static assets (compiled from ../build_tmp/frontend/dist/ into the binary).
-#[derive(RustEmbed)]
-#[folder = "../build_tmp/frontend/dist/"]
-struct FrontendAssets;
-
-async fn static_handler(uri: Uri) -> impl IntoResponse {
-    let path = uri.path().trim_start_matches('/');
-    let path = if path.is_empty() { "index.html" } else { path };
-
-    match FrontendAssets::get(path) {
-        Some(content) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
-            ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
-        }
-        None => match FrontendAssets::get("index.html") {
-            Some(content) => ([(header::CONTENT_TYPE, "text/html")], content.data).into_response(),
-            None => StatusCode::NOT_FOUND.into_response(),
-        },
-    }
-}
 
 /// Axum 路由共享状态 / Axum router shared state
 #[derive(Clone)]
@@ -68,22 +59,6 @@ pub struct ServerState {
     /// 转发管理器 / Relay manager
     pub relay_manager: Arc<RelayManager>,
 }
-
-struct ApiError(String);
-
-impl From<crate::core::error::AppError> for ApiError {
-    fn from(e: crate::core::error::AppError) -> Self {
-        ApiError(e.to_string())
-    }
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        (StatusCode::BAD_REQUEST, self.0).into_response()
-    }
-}
-
-type ApiResult<T> = std::result::Result<Json<T>, ApiError>;
 
 /// 构建 Axum 路由器，注册所有 API 路由和静态资源回退处理器。
 /// Build the Axum router, registering all API routes and the static asset fallback handler.
@@ -162,642 +137,7 @@ pub fn build_router(state: ServerState) -> Router {
         .layer(cors)
 }
 
-async fn sse_handler(
-    AxumState(s): AxumState<ServerState>,
-) -> Sse<impl tokio_stream::Stream<Item = Result<sse::Event, Infallible>>> {
-    let mut rx = s.broadcast_tx.subscribe();
-    let stream = async_stream::stream! {
-        loop {
-            match rx.recv().await {
-                Ok(e) => {
-                    let data = format!(r#"{{"event":"{}","payload":{}}}"#, e.name, e.payload);
-                    yield Ok(sse::Event::default().data(data));
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    // 队列溢出，丢失了 n 条事件；断开连接让前端重连并恢复状态
-                    // Queue overflow, lost n events; close connection so frontend reconnects and restores state
-                    tracing::warn!("SSE broadcast lagged, {} events dropped", n);
-                    let data = r#"{"event":"sse-lagged","payload":{}}"#;
-                    yield Ok(sse::Event::default().data(data));
-                    break;
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            }
-        }
-    };
-    Sse::new(stream).keep_alive(sse::KeepAlive::default())
-}
-
-async fn list_streamers(AxumState(s): AxumState<ServerState>) -> ApiResult<serde_json::Value> {
-    let streamers = s.app_state.get_streamers();
-
-    let has_any_status = streamers
-        .iter()
-        .any(|st| s.monitor.get_status(&st.username).is_some());
-    if !has_any_status && !streamers.is_empty() {
-        let monitor = Arc::clone(&s.monitor);
-        let emitter = Arc::clone(&s.emitter);
-        tokio::spawn(async move {
-            monitor.poll_all_with_emitter(&emitter).await;
-        });
-    }
-
-    let result: Vec<serde_json::Value> = streamers
-        .into_iter()
-        .map(|st| {
-            let status = s.monitor.get_status(&st.username);
-            serde_json::json!({
-                "username": st.username,
-                "auto_record": st.auto_record,
-                "added_at": st.added_at,
-                "is_online": status.as_ref().map(|s| s.is_online).unwrap_or(false),
-                "is_recording": s.recorder.is_recording(&st.username),
-                "is_recordable": status.as_ref().map(|s| s.is_recordable).unwrap_or(false),
-                "viewers": status.as_ref().map(|s| s.viewers).unwrap_or(0),
-                "status": status.as_ref().map(|s| s.status.clone()).unwrap_or_default(),
-                "thumbnail_url": status.and_then(|s| s.thumbnail_url),
-            })
-        })
-        .collect();
-    Ok(Json(serde_json::Value::Array(result)))
-}
-
-#[derive(Deserialize)]
-struct AddStreamerBody {
-    username: String,
-}
-
-async fn add_streamer(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<AddStreamerBody>,
-) -> ApiResult<serde_json::Value> {
-    let username = body.username.trim().to_lowercase();
-    if username.is_empty() {
-        return Err(ApiError("用户名不能为空".into()));
-    }
-    let settings = s.app_state.get_settings();
-    let api = crate::streaming::stripchat::StripchatApi::new_api_only(
-        settings.api_proxy_url.as_deref(),
-        settings.cdn_proxy_url.as_deref(),
-        settings.sc_mirror_url.as_deref(),
-    )
-    .map_err(ApiError::from)?;
-    api.get_stream_info(&username, false)
-        .await
-        .map_err(ApiError::from)?;
-    s.app_state
-        .add_streamer(&username)
-        .map_err(ApiError::from)?;
-    s.emitter.emit(
-        "streamer-added",
-        &serde_json::json!({ "username": username }),
-    );
-    let emitter = Arc::clone(&s.emitter);
-    let monitor = Arc::clone(&s.monitor);
-    tokio::spawn(async move {
-        monitor.poll_one_with_emitter(&username, &emitter).await;
-    });
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn remove_streamer(
-    AxumState(s): AxumState<ServerState>,
-    Path(name): Path<String>,
-) -> ApiResult<serde_json::Value> {
-    if s.recorder.is_recording(&name) {
-        s.recorder
-            .stop_recording(&name)
-            .await
-            .map_err(ApiError::from)?;
-    }
-    let settings = s.app_state.get_settings();
-    let dir = std::path::PathBuf::from(&settings.output_dir).join(&name);
-    if dir.exists() {
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-    s.app_state.remove_streamer(&name).map_err(ApiError::from)?;
-    s.emitter
-        .emit("streamer-removed", &serde_json::json!({ "username": name }));
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-#[derive(Deserialize)]
-struct AutoRecordBody {
-    enabled: bool,
-}
-
-async fn set_auto_record(
-    AxumState(s): AxumState<ServerState>,
-    Path(name): Path<String>,
-    Json(body): Json<AutoRecordBody>,
-) -> ApiResult<serde_json::Value> {
-    s.app_state
-        .set_auto_record(&name, body.enabled)
-        .map_err(ApiError::from)?;
-    s.emitter.emit(
-        "auto-record-changed",
-        &serde_json::json!({ "username": name, "enabled": body.enabled }),
-    );
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn start_recording(
-    AxumState(s): AxumState<ServerState>,
-    Path(name): Path<String>,
-) -> ApiResult<serde_json::Value> {
-    let playlist_url = if let Some(url) = s.monitor.get_cached_playlist_url(&name) {
-        url
-    } else {
-        let settings = s.app_state.get_settings();
-        let api = crate::streaming::stripchat::StripchatApi::new_api_only(
-            settings.api_proxy_url.as_deref(),
-            settings.cdn_proxy_url.as_deref(),
-            settings.sc_mirror_url.as_deref(),
-        )
-        .map_err(ApiError::from)?
-        .with_mouflon_keys(s.app_state.get_mouflon_keys());
-        let info = api
-            .get_stream_info(&name, true)
-            .await
-            .map_err(ApiError::from)?;
-        info.playlist_url
-            .ok_or_else(|| ApiError(format!("Stream offline: {}", name)))?
-    };
-    let path = s
-        .recorder
-        .start_recording_with_emitter(&name, &playlist_url, Arc::clone(&s.emitter))
-        .await
-        .map_err(ApiError::from)?;
-    Ok(Json(serde_json::json!({ "path": path })))
-}
-
-async fn stop_recording(
-    AxumState(s): AxumState<ServerState>,
-    Path(name): Path<String>,
-) -> ApiResult<serde_json::Value> {
-    let _ = s.app_state.set_auto_record(&name, false);
-    s.emitter.emit(
-        "auto-record-changed",
-        &serde_json::json!({ "username": name, "enabled": false }),
-    );
-    s.recorder
-        .stop_recording(&name)
-        .await
-        .map_err(ApiError::from)?;
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn verify_streamer(
-    AxumState(s): AxumState<ServerState>,
-    Path(name): Path<String>,
-) -> ApiResult<serde_json::Value> {
-    let settings = s.app_state.get_settings();
-    let api = crate::streaming::stripchat::StripchatApi::new_api_only(
-        settings.api_proxy_url.as_deref(),
-        settings.cdn_proxy_url.as_deref(),
-        settings.sc_mirror_url.as_deref(),
-    )
-    .map_err(ApiError::from)?;
-    match api.get_stream_info(&name, false).await {
-        Ok(_) => Ok(Json(serde_json::json!({ "exists": true }))),
-        Err(crate::core::error::AppError::UserNotFound(_)) => {
-            Ok(Json(serde_json::json!({ "exists": false })))
-        }
-        Err(e) => Err(ApiError(e.to_string())),
-    }
-}
-
-async fn get_settings(
-    AxumState(s): AxumState<ServerState>,
-) -> ApiResult<crate::config::settings::Settings> {
-    Ok(Json(s.app_state.get_settings()))
-}
-
-async fn save_settings(
-    AxumState(s): AxumState<ServerState>,
-    Json(new_settings): Json<crate::config::settings::Settings>,
-) -> ApiResult<serde_json::Value> {
-    s.app_state
-        .update_settings(new_settings)
-        .map_err(ApiError::from)?;
-    s.emitter
-        .emit("settings-updated", &s.app_state.get_settings());
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn list_mouflon_keys(AxumState(s): AxumState<ServerState>) -> ApiResult<serde_json::Value> {
-    Ok(Json(
-        serde_json::to_value(s.app_state.get_mouflon_keys_store()).unwrap(),
-    ))
-}
-
-#[derive(Deserialize)]
-struct MouflonKeyBody {
-    pkey: String,
-    pdkey: String,
-}
-
-async fn add_mouflon_key(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<MouflonKeyBody>,
-) -> ApiResult<serde_json::Value> {
-    s.app_state
-        .add_mouflon_key(&body.pkey, &body.pdkey)
-        .map_err(ApiError::from)?;
-    s.emitter
-        .emit("mouflon-keys-updated", &s.app_state.get_mouflon_keys_store());
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn remove_mouflon_key(
-    AxumState(s): AxumState<ServerState>,
-    Path(pkey): Path<String>,
-) -> ApiResult<serde_json::Value> {
-    s.app_state
-        .remove_mouflon_key(&pkey)
-        .map_err(ApiError::from)?;
-    s.emitter
-        .emit("mouflon-keys-updated", &s.app_state.get_mouflon_keys_store());
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-/// 手动触发一次 Mouflon Keys 从 Worker 同步（忽略时间间隔，强制比对 updated_at）。
-/// Manually trigger a Mouflon Keys sync from the Worker (bypasses interval, still compares updated_at).
-async fn sync_mouflon_keys(AxumState(s): AxumState<ServerState>) -> ApiResult<serde_json::Value> {
-    let settings = s.app_state.get_settings();
-    let url = settings
-        .mouflon_sync_url
-        .as_deref()
-        .filter(|u| !u.is_empty())
-        .ok_or_else(|| ApiError("未配置 mouflon_sync_url".into()))?
-        .to_string();
-    let token = settings.mouflon_sync_token.clone();
-
-    let updated = s
-        .app_state
-        .sync_mouflon_keys_from_worker(&url, token.as_deref())
-        .await
-        .map_err(ApiError::from)?;
-
-    if updated {
-        s.emitter
-            .emit("mouflon-keys-updated", &s.app_state.get_mouflon_keys_store());
-    }
-
-    Ok(Json(serde_json::json!({ "updated": updated })))
-}
-
-async fn get_startup_warnings_handler(
-    AxumState(s): AxumState<ServerState>,
-) -> ApiResult<serde_json::Value> {
-    let state = Arc::clone(&s.app_state);
-    let warnings = tokio::task::spawn_blocking(move || {
-        let data = state.data.read();
-        let missing_pp_results: Vec<String> = data
-            .pp_results
-            .iter()
-            .filter(|path| !std::path::Path::new(path.as_str()).exists())
-            .cloned()
-            .collect();
-        serde_json::json!({
-            "missing_streamers": [],
-            "missing_pp_results": missing_pp_results,
-        })
-    })
-    .await
-    .map_err(|e| ApiError(e.to_string()))?;
-    Ok(Json(warnings))
-}
-
-#[derive(Deserialize)]
-struct RemovePpResultsBody {
-    paths: Vec<String>,
-}
-
-async fn remove_missing_pp_results_handler(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<RemovePpResultsBody>,
-) -> ApiResult<serde_json::Value> {
-    let mut data = s.app_state.data.write();
-    data.pp_results.retain(|p| !body.paths.contains(p));
-    drop(data);
-    s.app_state.save().map_err(ApiError::from)?;
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn get_disk_space_handler(
-    AxumState(s): AxumState<ServerState>,
-) -> ApiResult<serde_json::Value> {
-    let state = Arc::clone(&s.app_state);
-    let result = tokio::task::spawn_blocking(move || {
-        crate::commands::settings_cmd::get_disk_space_inner(&state.get_settings().output_dir)
-    })
-    .await
-    .map_err(|e| ApiError(e.to_string()))??;
-    Ok(Json(serde_json::to_value(result).unwrap()))
-}
-
-async fn list_recordings(AxumState(s): AxumState<ServerState>) -> ApiResult<serde_json::Value> {
-    let state = Arc::clone(&s.app_state);
-    let recorder = Arc::clone(&s.recorder);
-    let files = tokio::task::spawn_blocking(move || {
-        crate::commands::recording_cmd::list_recordings_inner(&state, &recorder)
-    })
-    .await
-    .map_err(|e| ApiError(e.to_string()))?
-    .map_err(|e| ApiError(e.to_string()))?;
-    Ok(Json(serde_json::to_value(files).unwrap()))
-}
-
-async fn get_merging_dirs_handler(
-    AxumState(s): AxumState<ServerState>,
-) -> ApiResult<serde_json::Value> {
-    let settings = s.app_state.get_settings();
-    let merge_format = settings.merge_format.clone();
-
-    let make_entry = |path: &std::path::PathBuf, status: &str| {
-        let path_str = path.to_string_lossy().to_string();
-        let stem = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
-        let username = path
-            .parent()
-            .and_then(|p| p.file_name())
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        let parent = path
-            .parent()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let sep = if path_str.contains('\\') { "\\" } else { "/" };
-        let merged_path = format!("{}{}{}.{}", parent, sep, stem, merge_format);
-        serde_json::json!({
-            "session_dir": path_str,
-            "merged_path": merged_path,
-            "merge_format": merge_format,
-            "username": username,
-            "status": status,
-        })
-    };
-
-    let mut result: Vec<serde_json::Value> = s
-        .recorder
-        .merging_dirs
-        .read()
-        .iter()
-        .map(|p| make_entry(p, "merging"))
-        .collect();
-    result.extend(
-        s.recorder
-            .waiting_merge_dirs
-            .read()
-            .iter()
-            .map(|p| make_entry(p, "waiting")),
-    );
-    Ok(Json(serde_json::json!(result)))
-}
-
-#[derive(Deserialize)]
-struct PathBody {
-    path: String,
-}
-
-async fn delete_recording(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<PathBody>,
-) -> ApiResult<serde_json::Value> {
-    let recorder = Arc::clone(&s.recorder);
-    let state = Arc::clone(&s.app_state);
-    let path = body.path.clone();
-    tokio::task::spawn_blocking(move || {
-        crate::commands::recording_cmd::delete_recording_inner(&path, &recorder, &state)
-    })
-    .await
-    .map_err(|e| ApiError(e.to_string()))?
-    .map_err(ApiError::from)?;
-    s.emitter.emit(
-        "recording-deleted",
-        &serde_json::json!({ "path": body.path }),
-    );
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn open_recording(Json(body): Json<PathBody>) -> ApiResult<serde_json::Value> {
-    Ok(Json(serde_json::json!({ "path": body.path })))
-}
-
-async fn open_output_dir(AxumState(s): AxumState<ServerState>) -> ApiResult<serde_json::Value> {
-    let settings = s.app_state.get_settings();
-    Ok(Json(serde_json::json!({ "path": settings.output_dir })))
-}
-
-async fn run_postprocess(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<PathBody>,
-) -> ApiResult<serde_json::Value> {
-    let pipeline = s.app_state.get_pipeline();
-    if pipeline.nodes.is_empty() {
-        return Err(ApiError("后处理流水线为空".into()));
-    }
-    let video_path = std::path::PathBuf::from(&body.path);
-    let emitter = Arc::clone(&s.emitter);
-    let state = Arc::clone(&s.app_state);
-    state.pp_task_enqueue(&body.path);
-    emitter.emit(
-        "postprocess-waiting",
-        &serde_json::json!({ "path": body.path }),
-    );
-    tokio::task::spawn_blocking(move || {
-        crate::commands::postprocess_cmd::run_postprocess_for_path_inner(
-            &video_path,
-            &pipeline,
-            &emitter,
-            &state,
-        );
-    });
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-#[derive(Deserialize)]
-struct BatchPathBody {
-    paths: Vec<String>,
-}
-
-async fn run_postprocess_batch(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<BatchPathBody>,
-) -> ApiResult<serde_json::Value> {
-    let pipeline = s.app_state.get_pipeline();
-    if pipeline.nodes.is_empty() {
-        return Err(ApiError("后处理流水线为空".into()));
-    }
-    for path in body.paths {
-        let video_path = std::path::PathBuf::from(&path);
-        let emitter = Arc::clone(&s.emitter);
-        let state = Arc::clone(&s.app_state);
-        let pipeline = pipeline.clone();
-        state.pp_task_enqueue(&path);
-        emitter.emit("postprocess-waiting", &serde_json::json!({ "path": path }));
-        tokio::task::spawn_blocking(move || {
-            crate::commands::postprocess_cmd::run_postprocess_for_path_inner(
-                &video_path,
-                &pipeline,
-                &emitter,
-                &state,
-            );
-        });
-    }
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn cancel_postprocess(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<PathBody>,
-) -> ApiResult<serde_json::Value> {
-    s.app_state.pp_task_cancel(&body.path);
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn get_pipeline(
-    AxumState(s): AxumState<ServerState>,
-) -> ApiResult<crate::postprocess::pipeline::PipelineConfig> {
-    Ok(Json(s.app_state.get_pipeline()))
-}
-
-async fn save_pipeline(
-    AxumState(s): AxumState<ServerState>,
-    Json(pipeline): Json<crate::postprocess::pipeline::PipelineConfig>,
-) -> ApiResult<serde_json::Value> {
-    s.app_state
-        .update_pipeline(pipeline)
-        .map_err(ApiError::from)?;
-    s.emitter
-        .emit("pipeline-updated", &s.app_state.get_pipeline());
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn list_modules() -> ApiResult<serde_json::Value> {
-    let modules: Vec<crate::postprocess::pipeline::ModuleInfo> =
-        tokio::task::spawn_blocking(crate::postprocess::pipeline::discover_modules)
-            .await
-            .unwrap_or_default();
-    Ok(Json(serde_json::to_value(modules).unwrap()))
-}
-
-async fn get_postprocess_tasks(
-    AxumState(s): AxumState<ServerState>,
-) -> ApiResult<serde_json::Value> {
-    Ok(Json(
-        serde_json::to_value(s.app_state.get_pp_tasks()).unwrap(),
-    ))
-}
-
-#[derive(Deserialize)]
-struct FileQuery {
-    path: String,
-}
-
-async fn serve_output_file(
-    AxumState(s): AxumState<ServerState>,
-    Query(q): Query<FileQuery>,
-) -> impl IntoResponse {
-    let settings = s.app_state.get_settings();
-    let output_dir = std::path::Path::new(&settings.output_dir);
-    let requested = std::path::Path::new(&q.path);
-
-    let canonical_output = match output_dir.canonicalize() {
-        Ok(p) => p,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "output dir error").into_response(),
-    };
-    let canonical_requested = match requested.canonicalize() {
-        Ok(p) => p,
-        Err(_) => return (StatusCode::NOT_FOUND, "file not found").into_response(),
-    };
-    if !canonical_requested.starts_with(&canonical_output) {
-        return (StatusCode::FORBIDDEN, "access denied").into_response();
-    }
-
-    let data = match std::fs::read(&canonical_requested) {
-        Ok(d) => d,
-        Err(_) => return (StatusCode::NOT_FOUND, "file not found").into_response(),
-    };
-
-    let ext = canonical_requested
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
-    let mime = match ext {
-        "webp" => "image/webp",
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        _ => "application/octet-stream",
-    };
-
-    ([(header::CONTENT_TYPE, mime)], data).into_response()
-}
-
-async fn get_module_outputs(
-    AxumState(s): AxumState<ServerState>,
-    Json(body): Json<PathBody>,
-) -> ApiResult<serde_json::Value> {
-    let video_path = std::path::Path::new(&body.path);
-    let pipeline = s.app_state.get_pipeline();
-    let mut outputs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-
-    for node in &pipeline.nodes {
-        if !node.enabled {
-            continue;
-        }
-        if node.module_id == "contact_sheet" {
-            let format = node
-                .params
-                .get("format")
-                .and_then(|v: &serde_json::Value| v.as_str())
-                .unwrap_or("webp");
-            if let (Some(parent), Some(stem)) = (
-                video_path.parent(),
-                video_path.file_stem().and_then(|s| s.to_str()),
-            ) {
-                let img_path = parent.join(format!("{}.{}", stem, format));
-                if img_path.exists() {
-                    outputs.insert(
-                        node.module_id.clone(),
-                        img_path.to_string_lossy().to_string(),
-                    );
-                }
-            }
-        }
-    }
-
-    Ok(Json(serde_json::to_value(outputs).unwrap()))
-}
-
-/// 返回指定语言代码的完整 locale 数据（主程序翻译 + 所有模块翻译覆盖）。
-/// 若语言文件存在但校验失败，响应中附带 `warning` 字段。
-///
-/// Return the full locale data for the given locale code (app translations + all module overrides).
-/// If the locale file exists but fails validation, the response includes a `warning` field.
-async fn get_locale_handler(Path(locale_code): Path<String>) -> ApiResult<serde_json::Value> {
-    let lc = locale_code.clone();
-    let (locale, warning) = tokio::task::spawn_blocking(move || {
-        let data = crate::locale::manager::get_full_locale(&lc);
-        let warning = crate::locale::manager::validate_locale_file(&lc);
-        (data, warning)
-    })
-    .await
-    .map_err(|e| ApiError(e.to_string()))?;
-
-    let mut result = locale;
-    if let Some(w) = warning {
-        result["warning"] = serde_json::Value::String(w);
-    }
-    Ok(Json(result))
-}
-
-/// 扫描所有用户自定义语言文件，将校验失败的文件通过 SSE 推送给前端。
+/// 扫描用户自定义语言文件，将校验失败的文件通过 SSE 推送给前端。
 /// 在服务器启动、emitter 就绪后调用一次。
 ///
 /// Scan all user-defined locale files and push validation failures to the frontend via SSE.
@@ -814,17 +154,6 @@ pub fn emit_locale_warnings(emitter: &Arc<dyn crate::core::emitter::Emitter>) {
         .collect();
     tracing::warn!("Custom locale file validation warnings: {:?}", payload);
     emitter.emit("locale-warnings", &payload);
-}
-
-/// 返回可用语言列表（扫描 locale/app/ 目录）。
-/// Return the list of available locales (scanned from locale/app/ directory).
-async fn list_locales_handler() -> ApiResult<serde_json::Value> {
-    let locales = tokio::task::spawn_blocking(
-        crate::locale::manager::list_available_locales,
-    )
-    .await
-    .map_err(|e| ApiError(e.to_string()))?;
-    Ok(Json(serde_json::to_value(locales).unwrap()))
 }
 
 /// 初始化并启动 HTTP 服务器模式。
@@ -867,7 +196,11 @@ pub async fn run_server(port: u16) {
     {
         let settings = app_state.get_settings();
         let output_dir = std::path::PathBuf::from(&settings.output_dir);
-        let tmp_dir = settings.tmp_dir.as_deref().filter(|s| !s.is_empty()).map(std::path::PathBuf::from);
+        let tmp_dir = settings
+            .tmp_dir
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from);
         let merge_format = settings.merge_format.clone();
         let emitter_clone = Arc::clone(&emitter);
         let recorder_clone = Arc::clone(&recorder);
@@ -895,7 +228,9 @@ pub async fn run_server(port: u16) {
         let monitor_clone = Arc::clone(&monitor);
         let emitter_clone = Arc::clone(&emitter);
         tokio::spawn(async move {
-            monitor_clone.start_with_emitter_inner(emitter_clone, restart_rx).await;
+            monitor_clone
+                .start_with_emitter_inner(emitter_clone, restart_rx)
+                .await;
         });
     }
 
@@ -913,7 +248,12 @@ pub async fn run_server(port: u16) {
         let (mouflon_notify_tx, mouflon_notify_rx) = tokio::sync::mpsc::channel::<()>(1);
         *app_state_clone.mouflon_sync_notify_tx.write() = Some(mouflon_notify_tx);
         tokio::spawn(async move {
-            crate::config::settings::schedule_mouflon_sync(app_state_clone, emitter_clone, mouflon_notify_rx).await;
+            crate::config::settings::schedule_mouflon_sync(
+                app_state_clone,
+                emitter_clone,
+                mouflon_notify_rx,
+            )
+            .await;
         });
     }
 
@@ -933,7 +273,8 @@ pub async fn run_server(port: u16) {
         let output_dir = std::path::PathBuf::from(&settings.output_dir);
         let merge_format = settings.merge_format.clone();
         tokio::spawn(async move {
-            crate::recording::meta::schedule_meta_version_check(output_dir, merge_format, 300).await;
+            crate::recording::meta::schedule_meta_version_check(output_dir, merge_format, 300)
+                .await;
         });
     }
 

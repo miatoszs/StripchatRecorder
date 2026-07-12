@@ -73,8 +73,6 @@ pub struct StreamInfo {
     /// 是否可录制（公开秀状态）/ Whether recordable (public show status)
     #[allow(dead_code)]
     pub is_recordable: bool,
-    /// 观看人数 / Viewer count
-    pub viewers: i64,
     /// 直播间状态文字（中文）/ Stream status text (Chinese)
     pub status: String,
     /// 缩略图 URL / Thumbnail URL
@@ -244,42 +242,47 @@ impl StripchatApi {
         Err(AppError::Other(format!("All CDN TLDs failed → {}", url)))
     }
 
-    /// 查询主播是否处于群组秀状态，并返回群组秀类型（ticket / perMinute）。
-    /// Query whether a streamer is in a group show and return the group show type (ticket / perMinute).
-    async fn get_group_show_type(&self, username: &str) -> Option<String> {
-        const LIMIT: usize = 60;
-        let mut offset = 0usize;
-        loop {
-            let url = self.api_url(&format!(
-                "https://stripchat.com/api/front/models?removeShows=false&recInFeatured=false&limit={}&offset={}&primaryTag=girls&filterGroupTags=[[\"groupShow\"]]",
-                LIMIT, offset
-            ));
-            let Ok(resp) = self
-                .api_client
-                .get(&url)
-                .header("Referer", self.referer())
-                .send()
-                .await
-            else {
-                return None;
-            };
-            let Ok(json) = resp.json::<serde_json::Value>().await else {
-                return None;
-            };
-            let models = json["models"].as_array()?;
-            for m in models.iter() {
-                if m["username"].as_str() == Some(username) {
-                    return m["groupShowType"].as_str().map(|s| s.to_string());
-                }
-            }
-            if models.len() < LIMIT {
-                return None;
-            }
-            offset += LIMIT;
+    /// 查询主播在 groupShow 状态时的具体秀类型，通过 v2/models/username/{}/cam 接口获取。
+    /// 返回 show.mode，以及 ticket/perMinute 子类型（仅 groupShow mode 时有值）。
+    ///
+    /// Query the specific show type when a streamer is in groupShow status,
+    /// via the v2/models/username/{}/cam endpoint.
+    /// Returns the show.mode and ticket/perMinute subtype (only present in groupShow mode).
+    async fn get_group_show_detail(&self, username: &str) -> Option<String> {
+        let url = self.api_url(&format!(
+            "https://stripchat.com/api/front/v2/models/username/{}/cam",
+            username
+        ));
+        let resp = self
+            .api_client
+            .get(&url)
+            .header("Referer", format!("{}{}", self.referer(), username))
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
         }
+        let json: serde_json::Value = resp.json().await.ok()?;
+        let show = &json["cam"]["show"];
+        // show 为空对象时（public 状态），直接返回 None
+        if show.is_null() || !show.is_object() {
+            return None;
+        }
+        let mode = show["mode"].as_str()?;
+        // groupShow mode 下进一步区分 ticket / perMinute
+        if mode == "groupShow" {
+            let subtype = show["details"]["groupShow"]["type"].as_str().unwrap_or("").to_string();
+            return Some(format!("groupShow:{}", subtype));
+        }
+        Some(mode.to_string())
     }
 
     /// 获取主播的直播状态信息。
+    ///
+    /// 主接口使用 v1/broadcasts/{username}，该接口轻量且无需登录。
+    /// - 在线且状态为 groupShow 时，追加请求 v2/models/username/{}/cam 获取具体秀类型。
+    /// - 仅 public 状态时才获取播放列表 URL。
     ///
     /// # 参数 / Parameters
     /// - `username`: 主播用户名 / Streamer username
@@ -290,7 +293,7 @@ impl StripchatApi {
         fetch_playlist: bool,
     ) -> Result<StreamInfo> {
         let url = self.api_url(&format!(
-            "https://stripchat.com/api/front/v2/models/username/{}/cam",
+            "https://stripchat.com/api/front/v1/broadcasts/{}",
             username
         ));
 
@@ -313,59 +316,75 @@ impl StripchatApi {
         }
 
         let json: serde_json::Value = resp.json().await?;
-        let user = &json["user"]["user"];
-        let cam = &json["cam"];
+        let item = &json["item"];
 
-        let is_live = user["isLive"].as_bool().unwrap_or(false);
-        let viewers = user["viewersCount"].as_i64().unwrap_or(0);
-        let status_text = user["status"].as_str().unwrap_or("unknown");
+        let is_live = item["isLive"].as_bool().unwrap_or(false);
+        let status_text = item["status"].as_str().unwrap_or("unknown");
 
-        let group_show_type = if status_text == "groupShow" {
-            self.get_group_show_type(username).await
+        // groupShow 时，二次请求 cam 接口获取具体秀类型（ticket / perMinute / private / p2pVoice 等）
+        // For groupShow, make a secondary request to cam endpoint to get the specific show type
+        let status = if is_live && status_text == "groupShow" {
+            match self.get_group_show_detail(username).await {
+                Some(ref detail) if detail.starts_with("groupShow:") => {
+                    match detail.strip_prefix("groupShow:").unwrap_or("") {
+                        "ticket" => "票务秀".to_string(),
+                        "perMinute" => "计时秀".to_string(),
+                        _ => "群组秀".to_string(),
+                    }
+                }
+                Some(ref mode) => match mode.as_str() {
+                    "private" => "私密秀".to_string(),
+                    "p2pVoice" | "p2p" => "P2P".to_string(),
+                    "virtualPrivate" => "虚拟私密".to_string(),
+                    _ => "群组秀".to_string(),
+                },
+                None => "群组秀".to_string(),
+            }
         } else {
-            None
-        };
-
-        let status = match status_text {
-            "public" => "公开秀".to_string(),
-            "private" => "私密秀".to_string(),
-            "groupShow" => match group_show_type.as_deref() {
-                Some("ticket") => "票务秀".to_string(),
-                Some("perMinute") => "计时秀".to_string(),
-                _ => "群组秀".to_string(),
-            },
-            "virtualPrivate" => "虚拟私密".to_string(),
-            "p2p" => "P2P".to_string(),
-            "idle" => "等待".to_string(),
-            "off" => "离线".to_string(),
-            _ => status_text.to_string(),
+            match status_text {
+                "public" => "公开秀".to_string(),
+                "virtualPrivate" => "虚拟私密".to_string(),
+                "p2p" | "p2pVoice" => "P2P".to_string(),
+                "idle" => "等待".to_string(),
+                "off" => "离线".to_string(),
+                _ => status_text.to_string(),
+            }
         };
 
         let thumbnail_url = if is_live {
-            let snapshot_ts = user["snapshotTimestamp"]
+            let snapshot_ts = item["snapshotTimestamp"]
                 .as_i64()
                 .or_else(|| {
-                    user["snapshotTimestamp"]
+                    item["snapshotTimestamp"]
                         .as_str()
                         .and_then(|s| s.parse().ok())
                 })
                 .unwrap_or(0);
-            let stream_name = cam["streamName"].as_str().unwrap_or("");
+            let stream_name = item["streamName"].as_str().unwrap_or("");
             if snapshot_ts > 0 && !stream_name.is_empty() {
                 Some(format!(
                     "https://img.doppiocdn.net/thumbs/{}/{}",
                     snapshot_ts, stream_name
                 ))
             } else {
-                user["previewUrl"].as_str().map(|s| s.to_string())
+                item["previewUrl"].as_str().map(|s| s.to_string())
             }
         } else {
-            user["previewUrl"].as_str().map(|s| s.to_string())
+            item["previewUrl"].as_str().map(|s| s.to_string())
         };
 
         let is_recordable = is_live && status_text == "public";
+
+        // 构建一个最小化的 model_json 供 get_playlist_url 使用（仅需 user.user.id）
+        // Build a minimal model_json for get_playlist_url (only needs user.user.id)
         let playlist_url = if is_recordable && fetch_playlist {
-            self.get_playlist_url(username, &json).await.ok()
+            let model_id = item["modelId"].as_i64();
+            if let Some(mid) = model_id {
+                let model_json = serde_json::json!({ "user": { "user": { "id": mid } } });
+                self.get_playlist_url(username, &model_json).await.ok()
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -373,7 +392,6 @@ impl StripchatApi {
         Ok(StreamInfo {
             is_online: is_live,
             is_recordable,
-            viewers,
             status,
             thumbnail_url,
             playlist_url,

@@ -23,7 +23,6 @@ pub struct StreamerEntry {
     pub is_recording: bool,
     /// 是否可录制（直播间公开可访问）/ Whether recordable (stream publicly accessible)
     pub is_recordable: bool,
-    pub viewers: i64,
     /// 直播间状态文字 / Stream status text
     pub status: String,
     pub thumbnail_url: Option<String>,
@@ -49,7 +48,6 @@ pub async fn list_streamers(
                 is_online: status.as_ref().map(|s| s.is_online).unwrap_or(false),
                 is_recording: recorder.is_recording(&s.username),
                 is_recordable: status.as_ref().map(|s| s.is_recordable).unwrap_or(false),
-                viewers: status.as_ref().map(|s| s.viewers).unwrap_or(0),
                 status: status
                     .as_ref()
                     .map(|s| s.status.clone())

@@ -70,6 +70,7 @@ fn to_ascii_status(s: &str) -> String {
         "计时秀" => "Per-Minute Show".to_string(),
         "群组秀" => "Group Show".to_string(),
         "虚拟私密" => "Virtual Private".to_string(),
+        "P2P" => "P2P".to_string(),
         "等待" => "Waiting".to_string(),
         "离线" => "Offline".to_string(),
         "获取状态失败" => "Status Unavailable".to_string(),

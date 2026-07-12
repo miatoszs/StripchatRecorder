@@ -25,7 +25,6 @@ pub struct StreamerStatus {
     pub is_online: bool,
     pub is_recording: bool,
     pub is_recordable: bool,
-    pub viewers: i64,
     /// 直播间状态文字（中文）/ Stream status text (Chinese)
     pub status: String,
     pub thumbnail_url: Option<String>,
@@ -279,7 +278,6 @@ impl StatusMonitor {
                     is_online: false,
                     is_recording,
                     is_recordable: false,
-                    viewers: 0,
                     status: String::new(),
                     thumbnail_url: None,
                     playlist_url: None,
@@ -310,7 +308,6 @@ impl StatusMonitor {
             } else {
                 info.playlist_url.is_some()
             },
-            viewers: info.viewers,
             status: info.status.clone(),
             thumbnail_url: info.thumbnail_url.clone(),
             playlist_url: info.playlist_url.clone(),

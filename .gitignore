@@ -26,3 +26,4 @@ dist-ssr
 # Build output
 build/
 build_tmp/
+SCAPI Test/
