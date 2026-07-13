@@ -140,7 +140,7 @@ const COMMAND_MAP: Record<
 	add_streamer: {
 		method: "POST",
 		url: () => "/api/streamers",
-		body: (a) => ({ username: a.username }),
+		body: (a) => ({ usernames: a.usernames }),
 	},
 	remove_streamer: {
 		method: "DELETE",

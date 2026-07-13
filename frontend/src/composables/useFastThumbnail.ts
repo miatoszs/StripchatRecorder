@@ -43,20 +43,36 @@ export function useFastThumbnail(thumbnailUrl: Ref<string | null | undefined>) {
 			return;
 		}
 
-		// 对每个 CDN 域名创建一个图片加载 Promise，取最先成功的
-		// Create an image load Promise for each CDN TLD, take the first to succeed
+		// 创建所有候选 img 元素，胜出后立即清空其余 img 的 src 以中止请求
+		// Create all candidate img elements; clear the src of losers immediately after a winner is found
+		const imgs = CDN_TLDS.map((tld) => {
+			const img = new Image();
+			img.src = url.replace(matchedTld, tld);
+			return { tld, img };
+		});
+
 		const winner = await Promise.any(
-			CDN_TLDS.map(
-				(tld) =>
+			imgs.map(
+				({ tld, img }) =>
 					new Promise<string>((resolve, reject) => {
-						const candidate = url.replace(matchedTld, tld);
-						const img = new Image();
-						img.onload = () => resolve(candidate);
+						img.onload = () => resolve(img.src);
 						img.onerror = () => reject();
-						img.src = candidate;
+						// src 已在上面赋值，此处无需重复赋值
+						// src is already set above, no need to reassign here
+						void tld;
 					}),
 			),
 		).catch(() => url); // 全部失败时回退到原始 URL / Fall back to original URL if all fail
+
+		// 中止未完成的请求：将非胜出者的 src 清空
+		// Abort unfinished requests by clearing the src of non-winners
+		for (const { img } of imgs) {
+			if (img.src !== winner) {
+				img.onload = null;
+				img.onerror = null;
+				img.src = "";
+			}
+		}
 
 		resolvedUrl.value = winner;
 	}

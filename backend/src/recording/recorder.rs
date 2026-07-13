@@ -206,6 +206,7 @@ impl RecorderManager {
                 started_at,
                 size_bytes: 0,
                 video_duration_secs: None,
+                video_resolution: None,
                 pp_results: None,
                 module_outputs: None,
                 segments_downloaded: None,
@@ -1013,14 +1014,16 @@ fn merge_segments(
                 tracing::error!("Failed to remove segment dir: {}", e);
             }
             let duration = get_video_duration(&output_path);
+            let resolution = get_video_resolution(&output_path);
 
-            // 更新 meta：填入实际大小、时长，status 暂设为 "merging"（调用方会进一步更新）
-            // Update meta: fill in actual size and duration; status temporarily "merging"
+            // 更新 meta：填入实际大小、时长、分辨率，status 暂设为 "merging"（调用方会进一步更新）
+            // Update meta: fill in actual size, duration, and resolution; status temporarily "merging"
             // (caller will update it further)
             let size_bytes = fs::metadata(&output_path).map(|m| m.len()).unwrap_or(0);
             if let Some(mut meta) = crate::recording::meta::read_meta(&output_path) {
                 meta.size_bytes = size_bytes;
                 meta.video_duration_secs = duration;
+                meta.video_resolution = resolution;
                 // 保留 status 不变，由调用方根据是否有后处理流水线决定下一个状态
                 // Keep status unchanged; caller decides next status based on pipeline
                 crate::recording::meta::write_meta(&output_path, &meta);
@@ -1059,6 +1062,36 @@ pub fn get_video_duration(path: &std::path::Path) -> Option<u64> {
 
     let s = String::from_utf8_lossy(&output.stdout);
     s.trim().parse::<f64>().ok().map(|d| d as u64)
+}
+
+/// 使用 ffprobe 获取视频文件的分辨率（如 "1920x1080"）。
+/// Get the resolution of a video file (e.g. "1920x1080") using ffprobe.
+pub fn get_video_resolution(path: &std::path::Path) -> Option<String> {
+    let output = Command::new("ffprobe")
+        .args([
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=s=x:p=0",
+        ])
+        .arg(path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+
+    let s = String::from_utf8_lossy(&output.stdout);
+    let trimmed = s.trim();
+    // 格式为 "WxH"，过滤无效值（含 0 的结果） / Format is "WxH"; filter out invalid results (containing 0)
+    if trimmed.is_empty() || trimmed == "x" || trimmed.starts_with('x') || trimmed.ends_with('x') {
+        return None;
+    }
+    let parts: Vec<&str> = trimmed.split('x').collect();
+    if parts.len() == 2 && parts.iter().all(|p| p.parse::<u32>().map(|v| v > 0).unwrap_or(false)) {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
 }
 
 /// 启动时扫描输出目录，合并所有遗留的未完成录制片段，并对未后处理的视频触发后处理。

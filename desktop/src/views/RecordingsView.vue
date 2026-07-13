@@ -824,6 +824,7 @@
 								class="inline size-3.5 ml-0.5"
 							/>
 						</TableHead>
+						<TableHead class="whitespace-nowrap">{{ t("recordings.table.resolution") }}</TableHead>
 						<TableHead>{{ t("recordings.table.speed") }}</TableHead>
 						<TableHead>{{ t("recordings.table.segments") }}</TableHead>
 						<TableHead class="min-w-45">{{
@@ -844,7 +845,7 @@
 									@update:model-value="setGroupChecked(group)"
 								/>
 							</TableCell>
-							<TableCell colspan="8" class="font-semibold">
+							<TableCell colspan="9" class="font-semibold">
 								<span class="mr-2 text-muted-foreground text-xs">{{
 									collapsedGroups.has(group.username) ? "▶" : "▼"
 								}}</span>
@@ -884,7 +885,7 @@
 											}}</Badge>
 										</div>
 									</TableCell>
-									<td colspan="8" class="p-2 align-middle w-full">
+									<td colspan="9" class="p-2 align-middle w-full">
 										<div class="flex items-center gap-3 h-9 w-full">
 											<Loader2
 												class="size-4 animate-spin shrink-0 text-muted-foreground"
@@ -950,6 +951,10 @@
 										<span v-if="f.video_duration_secs != null">{{
 											formatDuration(f.video_duration_secs)
 										}}</span>
+										<span v-else class="text-muted-foreground">—</span>
+									</TableCell>
+									<TableCell class="tabular-nums font-mono text-xs">
+										<span v-if="f.video_resolution">{{ f.video_resolution }}</span>
 										<span v-else class="text-muted-foreground">—</span>
 									</TableCell>
 									<TableCell class="tabular-nums">

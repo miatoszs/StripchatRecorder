@@ -249,6 +249,37 @@ impl StripchatApi {
     /// via the v2/models/username/{}/cam endpoint.
     /// Returns the show.mode and ticket/perMinute subtype (only present in groupShow mode).
     async fn get_group_show_detail(&self, username: &str) -> Option<String> {
+        let json = self.fetch_cam_json(username).await?;
+        let show = &json["cam"]["show"];
+        if show.is_null() || !show.is_object() {
+            return None;
+        }
+        let mode = show["mode"].as_str()?;
+        if mode == "groupShow" {
+            let subtype = show["details"]["groupShow"]["type"].as_str().unwrap_or("").to_string();
+            return Some(format!("groupShow:{}", subtype));
+        }
+        Some(mode.to_string())
+    }
+
+    /// 从 v2/models/username/{}/cam 接口获取主播的离线预览图 URL。
+    /// 仅在主播离线且 v1/broadcasts 没有 previewUrl 时调用。
+    ///
+    /// Fetch the offline preview image URL from the v2/models/username/{}/cam endpoint.
+    /// Only called when the streamer is offline and v1/broadcasts has no previewUrl.
+    async fn get_cam_preview_url(&self, username: &str) -> Option<String> {
+        let json = self.fetch_cam_json(username).await?;
+        json["user"]["user"]["previewUrl"]
+            .as_str()
+            .map(|s| s.to_string())
+    }
+
+    /// 请求 v2/models/username/{}/cam 接口，返回解析后的 JSON。
+    /// 供 get_group_show_detail 和 get_cam_preview_url 共用，避免重复请求逻辑。
+    ///
+    /// Fetch and parse the v2/models/username/{}/cam endpoint JSON.
+    /// Shared by get_group_show_detail and get_cam_preview_url to avoid duplicate request logic.
+    async fn fetch_cam_json(&self, username: &str) -> Option<serde_json::Value> {
         let url = self.api_url(&format!(
             "https://stripchat.com/api/front/v2/models/username/{}/cam",
             username
@@ -263,22 +294,50 @@ impl StripchatApi {
         if !resp.status().is_success() {
             return None;
         }
-        let json: serde_json::Value = resp.json().await.ok()?;
-        let show = &json["cam"]["show"];
-        // show 为空对象时（public 状态），直接返回 None
-        if show.is_null() || !show.is_object() {
-            return None;
-        }
-        let mode = show["mode"].as_str()?;
-        // groupShow mode 下进一步区分 ticket / perMinute
-        if mode == "groupShow" {
-            let subtype = show["details"]["groupShow"]["type"].as_str().unwrap_or("").to_string();
-            return Some(format!("groupShow:{}", subtype));
-        }
-        Some(mode.to_string())
+        resp.json().await.ok()
     }
 
-    /// 获取主播的直播状态信息。
+    /// 验证主播用户名是否存在，仅发一次轻量请求，不解析直播状态。
+    /// 专用于添加主播时的用户名校验，避免触发 groupShow 二次请求等额外开销。
+    ///
+    /// Verify whether a streamer username exists with a single lightweight request,
+    /// without parsing any live status. Intended for username validation on add,
+    /// avoiding the extra groupShow secondary request overhead.
+    pub async fn verify_user_exists(&self, username: &str) -> Result<()> {
+        let url = self.api_url(&format!(
+            "https://stripchat.com/api/front/v1/broadcasts/{}",
+            username
+        ));
+
+        let resp = self
+            .api_client
+            .get(&url)
+            .header("Referer", format!("{}{}", self.referer(), username))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(AppError::Other(format!(
+                "API 返回 {} ({})",
+                resp.status().as_u16(),
+                username
+            )));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+
+        // 新 API 在用户不存在时返回 200，但 body 含错误描述
+        // New API returns 200 with an error body when the user does not exist
+        if json["title"].as_str() == Some("An error occurred")
+            && json["description"]
+                .as_str()
+                .is_some_and(|d| d.contains("not found"))
+        {
+            return Err(AppError::UserNotFound(format!("用户 {} 不存在", username)));
+        }
+
+        Ok(())
+    }
     ///
     /// 主接口使用 v1/broadcasts/{username}，该接口轻量且无需登录。
     /// - 在线且状态为 groupShow 时，追加请求 v2/models/username/{}/cam 获取具体秀类型。
@@ -305,9 +364,6 @@ impl StripchatApi {
             .await?;
 
         if !resp.status().is_success() {
-            if resp.status() == reqwest::StatusCode::NOT_FOUND {
-                return Err(AppError::UserNotFound(format!("用户 {} 不存在", username)));
-            }
             return Err(AppError::Other(format!(
                 "API 返回 {} ({})",
                 resp.status().as_u16(),
@@ -316,6 +372,17 @@ impl StripchatApi {
         }
 
         let json: serde_json::Value = resp.json().await?;
+
+        // 新 API 在用户不存在时返回 200，但 body 含错误描述
+        // New API returns 200 with an error body when the user does not exist
+        if json["title"].as_str() == Some("An error occurred")
+            && json["description"]
+                .as_str()
+                .is_some_and(|d| d.contains("not found"))
+        {
+            return Err(AppError::UserNotFound(format!("用户 {} 不存在", username)));
+        }
+
         let item = &json["item"];
 
         let is_live = item["isLive"].as_bool().unwrap_or(false);
@@ -343,6 +410,7 @@ impl StripchatApi {
         } else {
             match status_text {
                 "public" => "公开秀".to_string(),
+                "private" => "私密秀".to_string(),
                 "virtualPrivate" => "虚拟私密".to_string(),
                 "p2p" | "p2pVoice" => "P2P".to_string(),
                 "idle" => "等待".to_string(),
@@ -370,7 +438,9 @@ impl StripchatApi {
                 item["previewUrl"].as_str().map(|s| s.to_string())
             }
         } else {
-            item["previewUrl"].as_str().map(|s| s.to_string())
+            // v1/broadcasts 离线数据不含 previewUrl，回退到 cam 接口获取
+            // v1/broadcasts offline data has no previewUrl; fall back to cam endpoint
+            self.get_cam_preview_url(username).await
         };
 
         let is_recordable = is_live && status_text == "public";

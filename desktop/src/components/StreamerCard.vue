@@ -3,18 +3,26 @@
 
     展示单个主播的缩略图、在线状态、观看人数和录制控制按钮。
     通过 useFastThumbnail 对多个 CDN 域名进行竞速，加快缩略图加载速度。
+    缩略图左上角常驻 checkbox 覆盖层：未选中时悬停可见，选中后常驻高亮。
+    有任意主播被选中时（selectMode），卡片点击区域变为切换选中状态，操作按钮被隐藏。
 
     Displays a single streamer's thumbnail, online status, viewer count, and recording controls.
     Uses useFastThumbnail to race multiple CDN domains for faster thumbnail loading.
+    A checkbox overlay on the thumbnail is always present: visible on hover when unselected,
+    always visible when selected. When any streamer is selected (selectMode), clicking the card
+    toggles selection and normal action buttons are hidden.
 
     Props:
-        streamer - 主播数据对象 / Streamer data object
+        streamer    - 主播数据对象 / Streamer data object
+        selectMode  - 是否处于批量选择模式（外部有任意主播被选中）/ Whether batch selection mode is active
+        selected    - 是否被选中 / Whether this card is selected
 
     Emits:
-        remove       - 用户点击移除按钮 / User clicks remove button
-        start        - 用户点击开始录制 / User clicks start recording
-        stop         - 用户点击停止录制 / User clicks stop recording
-        toggle-auto  - 用户切换自动录制开关 / User toggles auto-record switch
+        remove        - 用户点击移除按钮 / User clicks remove button
+        start         - 用户点击开始录制 / User clicks start recording
+        stop          - 用户点击停止录制 / User clicks stop recording
+        toggle-auto   - 用户切换自动录制开关 / User toggles auto-record switch
+        toggle-select - 用户切换选中状态 / User toggles selection state
 -->
 <script setup lang="ts">
 	import type { StreamerEntry } from "../stores/streamers";
@@ -25,16 +33,20 @@
 	import { Label } from "@/components/ui/label";
 	import { ref, watch, computed } from "vue";
 	import { useFastThumbnail } from "@/composables/useFastThumbnail";
-	import { X, Circle } from "@lucide/vue";
+	import { X, Circle, Check } from "@lucide/vue";
 	import { useI18n } from "vue-i18n";
 
-	const props = defineProps<{ streamer: StreamerEntry }>();
-	void props;
+	const props = defineProps<{
+		streamer: StreamerEntry;
+		selectMode?: boolean;
+		selected?: boolean;
+	}>();
 	const emit = defineEmits<{
 		remove: [];
 		start: [];
 		stop: [];
 		"toggle-auto": [enabled: boolean];
+		"toggle-select": [];
 	}>();
 	const { t } = useI18n();
 
@@ -57,15 +69,22 @@
 		if (s.status === "公开秀") return "bg-green-900 text-green-300 border-transparent";
 		return "bg-amber-900 text-amber-300 border-transparent";
 	}
+
+	function onCardClick() {
+		if (props.selectMode) emit("toggle-select");
+	}
 </script>
 
 <template>
 	<Card
-		class="overflow-hidden transition-colors py-0"
+		class="overflow-hidden transition-colors py-0 group"
 		:class="{
-			'border-green-900/50': streamer.is_online && !streamer.is_recording,
-			'border-red-900/50': streamer.is_recording,
+			'border-green-900/50': streamer.is_online && !streamer.is_recording && !selected,
+			'border-red-900/50': streamer.is_recording && !selected,
+			'border-primary ring-2 ring-primary/40': selected,
+			'cursor-pointer': selectMode,
 		}"
+		@click="onCardClick"
 	>
 		<div class="relative aspect-video bg-muted overflow-hidden">
 			<img
@@ -80,10 +99,31 @@
 			>
 				{{ streamer.username[0].toUpperCase() }}
 			</div>
+
+			<!-- 录制状态指示器（非批量模式显示）/ Recording indicator (shown outside batch mode) -->
 			<Circle
-				v-if="streamer.is_recording"
+				v-if="streamer.is_recording && !selectMode"
 				class="absolute top-1.5 right-2 size-2.5 fill-red-500 text-red-500 animate-pulse"
 			/>
+
+			<!-- checkbox 覆盖层：选中时常驻，未选中时悬停显示 / Checkbox overlay: always visible when selected, shown on hover when not -->
+			<div
+				class="absolute inset-0 flex items-start justify-start p-2 transition-opacity cursor-pointer"
+				:class="selected
+					? 'opacity-100 bg-primary/15'
+					: 'opacity-0 group-hover:opacity-100 group-hover:bg-black/25'"
+				@click.stop="emit('toggle-select')"
+			>
+				<!-- 自绘受控 checkbox，避免 reka-ui CheckboxRoot 内部状态与父组件状态冲突 / -->
+				<!-- Custom controlled checkbox to avoid reka-ui CheckboxRoot internal state conflicts -->
+				<div
+					class="size-5 rounded border-2 shadow-md bg-background/80 flex items-center justify-center transition-colors"
+					:class="selected ? 'bg-primary border-primary' : 'border-input'"
+					@click.stop="emit('toggle-select')"
+				>
+					<Check v-if="selected" class="size-3.5 text-primary-foreground" />
+				</div>
+			</div>
 		</div>
 
 		<CardContent class="p-3 flex flex-col gap-2">
@@ -94,7 +134,7 @@
 					size="icon"
 					class="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
 					:title="t('streamerCard.removeTitle')"
-					@click="emit('remove')"
+					@click.stop="emit('remove')"
 				>
 					<X class="size-3.5" />
 				</Button>
@@ -114,7 +154,7 @@
 					class="flex-1"
 					:disabled="!streamer.is_recordable"
 					:title="!streamer.is_recordable ? streamer.status : ''"
-					@click="emit('start')"
+					@click.stop="emit('start')"
 				>
 					{{ t("streamerCard.startRecording") }}
 				</Button>
@@ -123,7 +163,7 @@
 					size="sm"
 					variant="destructive"
 					class="flex-1"
-					@click="emit('stop')"
+					@click.stop="emit('stop')"
 				>
 					{{ t("streamerCard.stopRecording") }}
 				</Button>
@@ -146,4 +186,3 @@
 		</CardContent>
 	</Card>
 </template>
-

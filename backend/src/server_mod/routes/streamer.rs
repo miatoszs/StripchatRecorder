@@ -47,40 +47,120 @@ pub async fn list_streamers(
 
 #[derive(Deserialize)]
 pub struct AddStreamerBody {
-    pub username: String,
+    /// 支持单个用户名（兼容旧调用方）或多个用户名列表。
+    /// Accepts a single username (for backward compatibility) or a list.
+    pub usernames: Vec<String>,
 }
 
 pub async fn add_streamer(
     AxumState(s): AxumState<ServerState>,
     Json(body): Json<AddStreamerBody>,
 ) -> ApiResult<serde_json::Value> {
-    let username = body.username.trim().to_lowercase();
-    if username.is_empty() {
+    // 去重、清理、过滤空值 / Deduplicate, trim, filter blanks
+    let mut seen = std::collections::HashSet::new();
+    let usernames: Vec<String> = body
+        .usernames
+        .into_iter()
+        .map(|u| u.trim().to_lowercase())
+        .filter(|u| !u.is_empty() && seen.insert(u.clone()))
+        .collect();
+
+    if usernames.is_empty() {
         return Err(ApiError("用户名不能为空".into()));
     }
+
+    let total = usernames.len();
     let settings = s.app_state.get_settings();
-    let api = crate::streaming::stripchat::StripchatApi::new_api_only(
-        settings.api_proxy_url.as_deref(),
-        settings.cdn_proxy_url.as_deref(),
-        settings.sc_mirror_url.as_deref(),
-    )
-    .map_err(ApiError::from)?;
-    api.get_stream_info(&username, false)
-        .await
-        .map_err(ApiError::from)?;
-    s.app_state
-        .add_streamer(&username)
-        .map_err(ApiError::from)?;
-    s.emitter.emit(
-        "streamer-added",
-        &serde_json::json!({ "username": username }),
+    let api = Arc::new(
+        crate::streaming::stripchat::StripchatApi::new_api_only(
+            settings.api_proxy_url.as_deref(),
+            settings.cdn_proxy_url.as_deref(),
+            settings.sc_mirror_url.as_deref(),
+        )
+        .map_err(ApiError::from)?,
     );
-    let emitter = Arc::clone(&s.emitter);
-    let monitor = Arc::clone(&s.monitor);
-    tokio::spawn(async move {
-        monitor.poll_one_with_emitter(&username, &emitter).await;
-    });
-    Ok(Json(serde_json::json!({ "ok": true })))
+
+    // 全量并发：所有请求同时发出，边完成边处理，最快速度
+    // Full concurrency: all requests sent at once, processed as they complete for maximum speed
+    let mut tasks = tokio::task::JoinSet::new();
+    for username in &usernames {
+        let api = Arc::clone(&api);
+        let username = username.clone();
+        tasks.spawn(async move {
+            let result = api.verify_user_exists(&username).await;
+            (username, result)
+        });
+    }
+
+    let mut success = 0usize;
+    let mut skipped = 0usize;
+    let mut failed = 0usize;
+    let mut done = 0usize;
+
+    // 每完成一个验证立即处理并推送进度事件，无需等待其他请求
+    // Process and emit progress for each result as soon as it completes
+    while let Some(res) = tasks.join_next().await {
+        let Ok((username, verify_result)) = res else { continue };
+
+        let (ok, skipped_entry, error_msg) = match verify_result {
+            Ok(()) => match s.app_state.add_streamer(&username) {
+                Ok(()) => {
+                    s.emitter.emit(
+                        "streamer-added",
+                        &serde_json::json!({ "username": username }),
+                    );
+                    success += 1;
+                    (true, false, None)
+                }
+                Err(e) if e.to_string().contains("已存在") => {
+                    // 已存在视为跳过，不计入失败 / Already exists: treat as skipped, not failed
+                    skipped += 1;
+                    (true, true, None)
+                }
+                Err(e) => {
+                    failed += 1;
+                    (false, false, Some(e.to_string()))
+                }
+            },
+            Err(e) => {
+                failed += 1;
+                (false, false, Some(e.to_string()))
+            }
+        };
+
+        done += 1;
+        // 推送进度事件 / Emit progress event
+        s.emitter.emit(
+            "streamer-batch-progress",
+            &serde_json::json!({
+                "done": done,
+                "total": total,
+                "username": username,
+                "ok": ok,
+                "skipped": skipped_entry,
+                "error": error_msg,
+            }),
+        );
+    }
+
+    // 所有验证和添加完成后，统一触发一次全量状态轮询（而非每个主播单独 spawn），
+    // 避免与验证请求并发过多导致 API 限流。
+    // After all verifications and additions, trigger a single full poll (instead of per-streamer spawns)
+    // to avoid concurrent API rate limiting with the verify requests.
+    if success > 0 {
+        let emitter = Arc::clone(&s.emitter);
+        let monitor = Arc::clone(&s.monitor);
+        tokio::spawn(async move {
+            monitor.poll_all_with_emitter(&emitter).await;
+        });
+    }
+
+    Ok(Json(serde_json::json!({
+        "total": total,
+        "success": success,
+        "skipped": skipped,
+        "failed": failed,
+    })))
 }
 
 pub async fn remove_streamer(
@@ -181,7 +261,7 @@ pub async fn verify_streamer(
         settings.sc_mirror_url.as_deref(),
     )
     .map_err(ApiError::from)?;
-    match api.get_stream_info(&name, false).await {
+    match api.verify_user_exists(&name).await {
         Ok(_) => Ok(Json(serde_json::json!({ "exists": true }))),
         Err(crate::core::error::AppError::UserNotFound(_)) => {
             Ok(Json(serde_json::json!({ "exists": false })))

@@ -84,15 +84,43 @@ export const useStreamersStore = defineStore("streamers", () => {
 	}
 
 	/**
-	 * 添加新主播到追踪列表。
-	 * Add a new streamer to the tracking list.
+	 * 添加新主播到追踪列表，支持批量。
+	 * 向后端发送用户名列表，后端并发验证后逐个添加。
+	 * 通过订阅 streamer-batch-progress 事件实时调用进度回调。
 	 *
-	 * @param username - 主播用户名 / Streamer username
+	 * Add streamers to the tracking list, supporting batch input.
+	 * Sends a list of usernames to the backend for concurrent verification and sequential addition.
+	 * Invokes the optional progress callback in real time via streamer-batch-progress events.
+	 *
+	 * @param usernames - 主播用户名列表 / List of streamer usernames
+	 * @param onProgress - 可选进度回调 (done, currentUsername) / Optional progress callback (done, currentUsername)
 	 */
-	async function addStreamer(username: string) {
-		markLocal(`add:${username}`);
-		await call("add_streamer", { username });
-		await fetchStreamers();
+	async function addStreamers(
+		usernames: string[],
+		onProgress?: (done: number, current: string) => void,
+	): Promise<{ total: number; success: number; skipped: number; failed: number }> {
+		for (const u of usernames) markLocal(`add:${u}`);
+
+		// 若提供进度回调，订阅进度事件并在完成后取消订阅
+		// If a progress callback is provided, subscribe to progress events and unsubscribe when done
+		let unlisten: (() => void) | null = null;
+		if (onProgress) {
+			unlisten = await on("streamer-batch-progress", (payload) => {
+				const p = payload as { done: number; username: string };
+				onProgress(p.done, p.username);
+			});
+		}
+
+		try {
+			const result = await call<{ total: number; success: number; skipped: number; failed: number }>(
+				"add_streamer",
+				{ usernames },
+			);
+			await fetchStreamers();
+			return result;
+		} finally {
+			unlisten?.();
+		}
 	}
 
 	/**
@@ -160,6 +188,90 @@ export const useStreamersStore = defineStore("streamers", () => {
 		if (s) s.is_relaying = false;
 	}
 
+	/**
+	 * 批量开始录制，并发发起，返回失败数量。
+	 * Batch start recording concurrently, returns failure count.
+	 *
+	 * @param usernames - 主播用户名列表 / List of streamer usernames
+	 */
+	async function batchStartRecording(
+		usernames: string[],
+	): Promise<{ failed: number }> {
+		const results = await Promise.allSettled(
+			usernames.map((u) => call("start_recording", { username: u })),
+		);
+		const failed = results.filter((r) => r.status === "rejected").length;
+		return { failed };
+	}
+
+	/**
+	 * 批量停止录制，并发发起，返回失败数量。
+	 * 立即在本地将录制状态设为 false，防止 UI 闪烁。
+	 *
+	 * Batch stop recording concurrently, returns failure count.
+	 * Immediately sets local recording state to false to prevent UI flicker.
+	 *
+	 * @param usernames - 主播用户名列表 / List of streamer usernames
+	 */
+	async function batchStopRecording(
+		usernames: string[],
+	): Promise<{ failed: number }> {
+		for (const u of usernames) {
+			stoppingSet.value.add(u);
+			const s = streamers.value.find((st) => st.username === u);
+			if (s) s.is_recording = false;
+		}
+		const results = await Promise.allSettled(
+			usernames.map((u) => call("stop_recording", { username: u })),
+		);
+		const failed = results.filter((r) => r.status === "rejected").length;
+		return { failed };
+	}
+
+	/**
+	 * 批量设置自动录制开关，并发执行，返回失败数量。
+	 * Batch set auto-record toggle concurrently, returns failure count.
+	 *
+	 * @param usernames - 主播用户名列表 / List of streamer usernames
+	 * @param enabled   - 是否开启自动录制 / Whether to enable auto-record
+	 */
+	async function batchSetAutoRecord(
+		usernames: string[],
+		enabled: boolean,
+	): Promise<{ failed: number }> {
+		const results = await Promise.allSettled(
+			usernames.map(async (u) => {
+				markLocal(`auto:${u}`);
+				await call("set_auto_record", { username: u, enabled });
+				const s = streamers.value.find((st) => st.username === u);
+				if (s) s.auto_record = enabled;
+			}),
+		);
+		const failed = results.filter((r) => r.status === "rejected").length;
+		return { failed };
+	}
+
+	/**
+	 * 批量移除主播，串行执行以保证顺序一致，返回失败数量。
+	 * Batch remove streamers serially to maintain consistency, returns failure count.
+	 *
+	 * @param usernames - 主播用户名列表 / List of streamer usernames
+	 */
+	async function batchRemove(
+		usernames: string[],
+	): Promise<{ failed: number }> {
+		let failed = 0;
+		for (const u of usernames) {
+			try {
+				markLocal(`remove:${u}`);
+				await call("remove_streamer", { username: u });
+				streamers.value = streamers.value.filter((s) => s.username !== u);
+			} catch {
+				failed++;
+			}
+		}
+		return { failed };
+	}
 	/**
 	 * 初始化后端事件监听器（只执行一次）。
 	 * 监听主播添加/移除、状态更新、录制开始/停止、自动录制变更等事件。
@@ -240,11 +352,15 @@ export const useStreamersStore = defineStore("streamers", () => {
 		loading,
 		error,
 		fetchStreamers,
-		addStreamer,
+		addStreamers,
 		removeStreamer,
 		setAutoRecord,
 		startRecording,
 		stopRecording,
+		batchStartRecording,
+		batchStopRecording,
+		batchSetAutoRecord,
+		batchRemove,
 		stopRelay,
 		initListeners,
 	};

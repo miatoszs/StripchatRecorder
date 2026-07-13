@@ -91,6 +91,10 @@ pub struct VideoMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_duration_secs: Option<u64>,
 
+    /// 视频分辨率（如 "1920x1080"，合并完成后由 ffprobe 填入）/ Video resolution (e.g. "1920x1080", filled by ffprobe after merge)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub video_resolution: Option<String>,
+
     /// 各模块的后处理结果（后处理完成后填充）/ Per-module post-processing results (filled after completion)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pp_results: Option<Vec<PpModuleResult>>,
@@ -183,6 +187,7 @@ pub fn set_status(video_path: &Path, status: &str) {
                 started_at,
                 size_bytes,
                 video_duration_secs: None,
+                video_resolution: None,
                 pp_results: None,
                 module_outputs: None,
                 segments_downloaded: None,
@@ -238,6 +243,7 @@ pub fn set_pp_done(
                 started_at,
                 size_bytes,
                 video_duration_secs: None,
+                video_resolution: None,
                 pp_results: None,
                 module_outputs: None,
                 segments_downloaded: None,
@@ -268,6 +274,7 @@ pub fn ensure_meta(video_path: &Path, started_at: &str) {
         started_at: started_at.to_string(),
         size_bytes,
         video_duration_secs: None,
+        video_resolution: None,
         pp_results: None,
         module_outputs: None,
         segments_downloaded: None,
@@ -358,12 +365,14 @@ fn scan_and_ensure_meta(
                             .unwrap_or_default()
                     });
                     let video_duration_secs = crate::recording::recorder::get_video_duration(&path);
+                    let video_resolution = crate::recording::recorder::get_video_resolution(&path);
                     let meta = VideoMeta {
                         meta_version: META_VERSION,
                         status: "finish".to_string(),
                         started_at,
                         size_bytes,
                         video_duration_secs,
+                        video_resolution,
                         pp_results: None,
                         module_outputs: None,
                         segments_downloaded: None,
@@ -393,11 +402,14 @@ fn scan_and_ensure_meta(
                             meta.meta_version,
                             META_VERSION
                         );
-                        // 重新从磁盘读取 size_bytes 和 video_duration_secs
-                        // Re-read size_bytes and video_duration_secs from disk
+                        // 重新从磁盘读取 size_bytes、video_duration_secs 和 video_resolution
+                        // Re-read size_bytes, video_duration_secs and video_resolution from disk
                         meta.size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(meta.size_bytes);
                         if meta.video_duration_secs.is_none() {
                             meta.video_duration_secs = crate::recording::recorder::get_video_duration(&path);
+                        }
+                        if meta.video_resolution.is_none() {
+                            meta.video_resolution = crate::recording::recorder::get_video_resolution(&path);
                         }
                         // 过渡态修正为 finish（版本升级时崩溃遗留）
                         // Correct transient status to finish (crash remnant during version upgrade)
@@ -419,6 +431,12 @@ fn scan_and_ensure_meta(
                     if meta.video_duration_secs.is_none() {
                         meta.video_duration_secs = crate::recording::recorder::get_video_duration(&path);
                         changed = true;
+                    }
+                    if meta.video_resolution.is_none() {
+                        meta.video_resolution = crate::recording::recorder::get_video_resolution(&path);
+                        if meta.video_resolution.is_some() {
+                            changed = true;
+                        }
                     }
                     if changed {
                         write_meta(&path, &meta);

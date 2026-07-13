@@ -64,7 +64,7 @@ async function addToRecord(username: string) {
   if (addingSet.value.has(username)) return;
   addingSet.value = new Set(addingSet.value).add(username);
   try {
-    await streamersStore.addStreamer(username);
+    await streamersStore.addStreamers([username]);
     toast(t("finder.card.addedToast", { username }), "success");
   } catch (e) {
     toast(e instanceof Error ? e.message : String(e), "error");

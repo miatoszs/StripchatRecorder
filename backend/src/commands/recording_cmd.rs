@@ -22,6 +22,8 @@ pub struct RecordingFile {
     pub record_duration_secs: Option<u64>,
     pub video_duration_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub video_resolution: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pp_results: Option<Vec<crate::recording::meta::PpModuleResult>>,
@@ -128,6 +130,7 @@ fn collect_from_meta(
                     is_recording: false,
                     record_duration_secs: None,
                     video_duration_secs: meta.video_duration_secs,
+                    video_resolution: meta.video_resolution,
                     status: Some(meta.status),
                     pp_results: meta.pp_results,
                     module_outputs: meta.module_outputs,
@@ -161,6 +164,7 @@ fn collect_from_meta(
                         is_recording: true,
                         record_duration_secs: Some(elapsed),
                         video_duration_secs: None,
+                        video_resolution: None,
                         status: Some("recording".to_string()),
                         pp_results: None,
                         module_outputs: None,
@@ -176,6 +180,7 @@ fn collect_from_meta(
                         is_recording: false,
                         record_duration_secs: None,
                         video_duration_secs: None,
+                        video_resolution: None,
                         status: Some(meta.status),
                         pp_results: meta.pp_results,
                         module_outputs: meta.module_outputs,

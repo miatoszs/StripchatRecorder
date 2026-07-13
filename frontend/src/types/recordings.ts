@@ -48,6 +48,8 @@ export interface RecordingFile {
 	record_duration_secs: number | null;
 	/** 视频实际时长（秒），由 ffprobe 获取并写入 meta / Actual video duration (seconds), obtained via ffprobe and stored in meta */
 	video_duration_secs: number | null;
+	/** 视频分辨率（如 "1920x1080"），由 ffprobe 获取并写入 meta / Video resolution (e.g. "1920x1080"), obtained via ffprobe and stored in meta */
+	video_resolution?: string | null;
 	/** 当前处理状态（来自 meta 文件）/ Current processing status (from meta file) */
 	status?: RecordingStatus | null;
 	/** 各模块后处理结果（来自 meta 文件）/ Per-module post-processing results (from meta file) */
