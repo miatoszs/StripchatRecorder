@@ -1,8 +1,8 @@
 /**
- * 可用语言列表 Store / Available Locales Store
+ * Available Locales Store
  *
- * 集中管理从后端获取的可用语言列表，供 SetupView、SettingsView 共享。
- * 需要在 App.vue 的 onMounted 里调用 setup() 来完成事件监听注册。
+ * ， SetupView、SettingsView 。
+ * App.vue  onMounted  setup() 。
  *
  * Centrally manages the available locale list fetched from the backend,
  * shared by SetupView and SettingsView.
@@ -15,13 +15,13 @@ import { fetchAvailableLocales, type LocaleEntry } from "@/i18n";
 import { on } from "@/lib/api";
 
 export const useLocalesStore = defineStore("locales", () => {
-	/** 可用语言列表 / Available locale list */
+	/*Available locale list */
 	const locales = ref<LocaleEntry[]>([]);
-	/** 是否已完成首次加载 / Whether the initial load has completed */
+	/*Whether the initial load has completed */
 	const loaded = ref(false);
 
 	/**
-	 * 从后端拉取最新的可用语言列表，有变化时才更新。
+	 * ，。
 	 * Fetch the latest available locale list; only update if it changed.
 	 */
 	async function refresh() {
@@ -35,8 +35,8 @@ export const useLocalesStore = defineStore("locales", () => {
 	}
 
 	/**
-	 * 注册事件监听。必须在 App.vue 的 onMounted 里 await 调用，
-	 * 确保 Tauri webview 已就绪（desktop 模式）或 SSE 已连接（server 模式）。
+	 * 。 App.vue  onMounted  await ，
+	 * Tauri webview （desktop ） SSE （server ）。
 	 *
 	 * Register event listeners. Must be awaited in App.vue's onMounted
 	 * to ensure Tauri webview is ready (desktop) or SSE is connected (server).

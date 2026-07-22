@@ -1,7 +1,7 @@
 /**
- * API 通信层（Tauri 桌面版）/ API Communication Layer (Tauri Desktop)
+ * API （Tauri ）/ API Communication Layer (Tauri Desktop)
  *
- * 将命令调用从 HTTP REST + SSE 替换为 Tauri IPC：
+ * HTTP REST + SSE  Tauri IPC：
  * - `call()` → `@tauri-apps/api/core invoke()`
  * - `on()`   → `@tauri-apps/api/event listen()`
  *
@@ -13,21 +13,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-// ─── 事件系统（基于 Tauri listen）/ Event system (Tauri listen-based) ───────
+// ─── （ Tauri listen）/ Event system (Tauri listen-based) ───────
 
 /**
- * SSE 重连回调集合（Tauri 模式下无需重连，保留接口兼容性）。
+ * SSE （Tauri ，）。
  * SSE reconnect callbacks (no reconnect needed in Tauri mode, kept for interface compatibility).
  */
 let sseReconnectCallbacks: Set<() => void> = new Set();
 /**
- * SSE 断开连接回调集合（同上，Tauri 无此概念）。
+ * SSE （，Tauri ）。
  * SSE disconnect callbacks (same as above, no such concept in Tauri).
  */
 let sseDisconnectCallbacks: Set<() => void> = new Set();
 
 /**
- * 注册 SSE 重连回调（Tauri 模式下为空操作）。
+ * SSE （Tauri ）。
  * Register SSE reconnect callback (no-op in Tauri mode).
  */
 export function onSseReconnect(cb: () => void): () => void {
@@ -36,7 +36,7 @@ export function onSseReconnect(cb: () => void): () => void {
 }
 
 /**
- * 注册 SSE 断开连接回调（Tauri 模式下为空操作）。
+ * SSE （Tauri ）。
  * Register SSE disconnect callback (no-op in Tauri mode).
  */
 export function onSseDisconnect(cb: () => void): () => void {
@@ -45,14 +45,14 @@ export function onSseDisconnect(cb: () => void): () => void {
 }
 
 /**
- * 调用后端 Tauri 命令。
+ * Tauri 。
  * Invoke a backend Tauri command.
  *
- * 命令名（command）直接映射到 #[tauri::command] 函数名（snake_case）。
+ * （command） #[tauri::command] （snake_case）。
  * Command names map directly to #[tauri::command] function names (snake_case).
  *
- * @param command - Tauri 命令名 / Tauri command name
- * @param args    - 命令参数（对象键对应命令参数名）/ Command arguments (keys match parameter names)
+ * Tauri command name
+ * @param args    - （）/ Command arguments (keys match parameter names)
  */
 export async function call<T = unknown>(
 	command: string,
@@ -62,16 +62,16 @@ export async function call<T = unknown>(
 }
 
 /**
- * 订阅 Tauri 后端事件。
+ * Tauri 。
  * Subscribe to a Tauri backend event.
  *
- * 事件名与 server 模式的 SSE 事件名完全相同（因为后端 Emitter 发出的名称一致）。
+ * server  SSE （ Emitter ）。
  * Event names are identical to server mode SSE event names
  * (backend Emitter emits the same names).
  *
- * @param event - 事件名称 / Event name
- * @param cb    - 事件回调 / Event callback
- * @returns 取消订阅函数 / Unsubscribe function
+ * Event name
+ * Event callback
+ * Unsubscribe function
  */
 export async function on(
 	event: string,

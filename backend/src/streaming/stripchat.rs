@@ -1,9 +1,9 @@
-//! Stripchat API 客户端 / Stripchat API Client
+//! Stripchat API Client
 //!
-//! 封装对 Stripchat 前端 API 的访问，包括：
-//! - 获取主播直播状态和播放列表 URL
-//! - 下载 HLS 分片（支持多 CDN 竞速）
-//! - 解析 Mouflon 加密的播放列表
+//! Stripchat  API ，：
+//! -  URL
+//! -  HLS （ CDN ）
+//! -  Mouflon
 //!
 //! Wraps access to the Stripchat frontend API, including:
 //! - Fetching streamer live status and playlist URLs
@@ -16,12 +16,12 @@ use reqwest::{Client, Response};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// 模拟浏览器的 User-Agent / Browser-mimicking User-Agent
+/// Browser-mimicking User-Agent
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
-/// 请求 Referer 头 / Request Referer header
+/// Request Referer header
 const REFERER: &str = "https://stripchat.com/";
 
-/// 支持的 CDN 顶级域名列表（用于多 CDN 竞速）/ Supported CDN TLDs (for multi-CDN racing)
+/// CDN （ CDN ）/ Supported CDN TLDs (for multi-CDN racing)
 const CDN_TLDS: &[&str] = &[
     "doppiocdn.com",
     "doppiocdn.org",
@@ -42,7 +42,7 @@ fn get_default_headers() -> HeaderMap {
     headers
 }
 
-/// 构建用于 CDN 分片下载的 HTTP 客户端（支持代理，启用 TCP keepalive）。
+/// CDN  HTTP （， TCP keepalive）。
 /// Build an HTTP client for CDN segment downloads (supports proxy, enables TCP keepalive).
 fn build_client(proxy_url: Option<&str>) -> Result<Client> {
     let mut builder = Client::builder()
@@ -64,7 +64,7 @@ fn build_client(proxy_url: Option<&str>) -> Result<Client> {
     Ok(builder.build()?)
 }
 
-/// 构建用于 API 请求的 HTTP 客户端（支持代理，不启用 keepalive）。
+/// API  HTTP （， keepalive）。
 /// Build an HTTP client for API requests (supports proxy, no keepalive).
 fn build_api_client(proxy_url: Option<&str>) -> Result<Client> {
     let mut builder = Client::builder()
@@ -83,41 +83,41 @@ fn build_api_client(proxy_url: Option<&str>) -> Result<Client> {
     Ok(builder.build()?)
 }
 
-/// 主播直播状态信息 / Streamer live status information
+/// Streamer live status information
 #[derive(Debug, Clone)]
 pub struct StreamInfo {
-    /// 是否在线 / Whether online
+    /// Whether online
     pub is_online: bool,
-    /// 是否可录制（公开秀状态）/ Whether recordable (public show status)
+    /// （）/ Whether recordable (public show status)
     #[allow(dead_code)]
     pub is_recordable: bool,
-    /// 观看人数 / Viewer count
+    /// Viewer count
     pub viewers: i64,
-    /// 直播间状态文字（中文）/ Stream status text (Chinese)
+    /// （）/ Stream status text (Chinese)
     pub status: String,
-    /// 缩略图 URL / Thumbnail URL
+    /// Thumbnail URL
     pub thumbnail_url: Option<String>,
-    /// HLS 播放列表 URL（仅在 fetch_playlist=true 且可录制时有值）/ HLS playlist URL (only when fetch_playlist=true and recordable)
+    /// HLS  URL（ fetch_playlist=true ）/ HLS playlist URL (only when fetch_playlist=true and recordable)
     pub playlist_url: Option<String>,
 }
 
-/// Stripchat API 客户端，封装 API 请求和 CDN 分片下载。
+/// Stripchat API ， API  CDN 。
 /// Stripchat API client wrapping API requests and CDN segment downloads.
 pub struct StripchatApi {
-    /// API 请求客户端 / API request client
+    /// API request client
     api_client: Client,
-    /// CDN 分片下载客户端 / CDN segment download client
+    /// CDN segment download client
     cdn_client: Client,
-    /// 可选的镜像站域名 / Optional mirror site domain
+    /// Optional mirror site domain
     sc_mirror: Option<String>,
-    /// 各 CDN 节点的首选 TLD 缓存（节点 ID -> TLD）/ Preferred TLD cache per CDN node (node ID -> TLD)
+    /// CDN  TLD （ ID -> TLD）/ Preferred TLD cache per CDN node (node ID -> TLD)
     preferred_tld_by_node: Arc<parking_lot::Mutex<std::collections::HashMap<String, String>>>,
-    /// Mouflon 解密密钥（pkey -> pdkey），用于 playlist URL 匹配 / Mouflon decryption keys (pkey -> pdkey) for playlist URL matching
+    /// Mouflon decryption keys (pkey -> pdkey) for playlist URL matching
     mouflon_keys: HashMap<String, String>,
 }
 
 impl StripchatApi {
-    /// 创建完整的 API 客户端（API + CDN，带 CDN TLD 缓存）。
+    /// API （API + CDN， CDN TLD ）。
     /// Create a full API client (API + CDN, with CDN TLD cache).
     pub fn new(
         api_proxy: Option<&str>,
@@ -134,7 +134,7 @@ impl StripchatApi {
         })
     }
 
-    /// 创建仅用于 API 请求的客户端（不需要 CDN TLD 缓存，适用于验证用户名等场景）。
+    /// API （ CDN TLD ，）。
     /// Create an API-only client (no CDN TLD cache, suitable for username verification, etc.).
     pub fn new_api_only(
         api_proxy: Option<&str>,
@@ -149,20 +149,20 @@ impl StripchatApi {
         )
     }
 
-    /// 设置 Mouflon 解密密钥，返回 self 以支持链式调用。
+    /// Mouflon ， self 。
     /// Set Mouflon decryption keys, returns self for method chaining.
     pub fn with_mouflon_keys(mut self, keys: HashMap<String, String>) -> Self {
         self.mouflon_keys = keys;
         self
     }
 
-    /// 获取当前 Mouflon 解密密钥的引用。
+    /// Mouflon 。
     /// Get a reference to the current Mouflon decryption keys.
     pub fn mouflon_keys(&self) -> &HashMap<String, String> {
         &self.mouflon_keys
     }
 
-    /// 将 stripchat.com 域名替换为镜像站域名（若已配置）。
+    /// stripchat.com （）。
     /// Replace the stripchat.com domain with the mirror site domain (if configured).
     fn api_url(&self, url: &str) -> String {
         match &self.sc_mirror {
@@ -171,7 +171,7 @@ impl StripchatApi {
         }
     }
 
-    /// 返回适配镜像站的 Referer 头值。
+    /// Referer 。
     /// Return the Referer header value adapted for the mirror site.
     fn referer(&self) -> String {
         match &self.sc_mirror {
@@ -180,7 +180,7 @@ impl StripchatApi {
         }
     }
 
-    /// 从 CDN URL 中提取节点 ID（URL 主机名的第一段）。
+    /// CDN URL  ID（URL ）。
     /// Extract the node ID from a CDN URL (first segment of the hostname).
     fn extract_node_id(url: &str) -> Option<&str> {
         let without_scheme = url.strip_prefix("https://")?;
@@ -188,8 +188,8 @@ impl StripchatApi {
         host.split('.').next()
     }
 
-    /// 对 CDN URL 进行多 TLD 竞速请求，返回最先成功响应的结果。
-    /// 同时更新节点的首选 TLD 缓存，加速后续请求。
+    /// CDN URL  TLD ，。
+    /// TLD ，。
     ///
     /// Race a CDN URL across multiple TLDs and return the first successful response.
     /// Also updates the preferred TLD cache for the node to speed up subsequent requests.
@@ -262,7 +262,7 @@ impl StripchatApi {
         Err(AppError::Other(format!("All CDN TLDs failed → {}", url)))
     }
 
-    /// 查询主播是否处于群组秀状态，并返回群组秀类型（ticket / perMinute）。
+    /// perMinute）。
     /// Query whether a streamer is in a group show and return the group show type (ticket / perMinute).
     async fn get_group_show_type(&self, username: &str) -> Option<String> {
         const LIMIT: usize = 60;
@@ -297,11 +297,11 @@ impl StripchatApi {
         }
     }
 
-    /// 获取主播的直播状态信息。
+    /// 。
     ///
-    /// # 参数 / Parameters
-    /// - `username`: 主播用户名 / Streamer username
-    /// - `fetch_playlist`: 是否同时获取 HLS 播放列表 URL（仅在可录制时有效）/ Whether to also fetch the HLS playlist URL (only effective when recordable)
+    /// Parameters
+    /// Streamer username
+    /// - `fetch_playlist`:  HLS  URL（）/ Whether to also fetch the HLS playlist URL (only effective when recordable)
     pub async fn get_stream_info(
         &self,
         username: &str,
@@ -402,7 +402,7 @@ impl StripchatApi {
         })
     }
 
-    /// 从 HTML 页面解析主播直播状态（用于 API 返回 403 Forbidden 时的 fallback 绕过）。
+    /// HTML （ API  403 Forbidden  fallback ）。
     /// Parse streamer live status from HTML page (used as a fallback bypass when API returns 403 Forbidden).
     async fn get_stream_info_from_html(
         &self,
@@ -509,14 +509,14 @@ impl StripchatApi {
         })
     }
 
-    /// 对所有 CDN TLD 竞速请求 `_auto.m3u8` master playlist，返回最先成功的响应文本。
+    /// CDN TLD  `_auto.m3u8` master playlist，。
     /// Race all CDN TLDs for the `_auto.m3u8` master playlist and return the first successful response text.
     async fn fetch_auto_playlist(&self, model_id: i64) -> Result<String> {
         let client = &self.cdn_client;
         let mut tasks = tokio::task::JoinSet::new();
 
         for &tld in CDN_TLDS {
-            // 使用固定路径模板：edge-hls.{tld}/hls/{model_id}/master/{model_id}_auto.m3u8
+            // ：edge-hls.{tld}/hls/{model_id}/master/{model_id}_auto.m3u8
             let url = format!(
                 "https://edge-hls.{}/hls/{}/master/{}_auto.m3u8",
                 tld, model_id, model_id
@@ -559,15 +559,15 @@ impl StripchatApi {
         )))
     }
 
-    /// 从 master playlist 文本中解析出 BANDWIDTH 最高的流 URL，以及所有 Mouflon PSCH 参数对。
+    /// master playlist  BANDWIDTH  URL， Mouflon PSCH 。
     /// Parse the stream URL with the highest BANDWIDTH from the master playlist text,
     /// along with all Mouflon PSCH parameter pairs.
     fn parse_best_stream(playlist: &str) -> Option<(String, Vec<(String, String)>)> {
-        // 先把 \r\n 统一成 \n，再按 \n 分割
+        // \r\n  \n， \n
         let normalized = playlist.replace("\r\n", "\n").replace('\r', "\n");
         let lines: Vec<&str> = normalized.split('\n').map(|l| l.trim()).collect();
 
-        // 收集所有 Mouflon PSCH 参数对 (psch, pkey)
+        // Mouflon PSCH  (psch, pkey)
         let mut mouflon_pairs: Vec<(String, String)> = Vec::new();
         for &line in &lines {
             if let Some(rest) = line.strip_prefix("#EXT-X-MOUFLON:PSCH:")
@@ -576,14 +576,14 @@ impl StripchatApi {
             }
         }
 
-        // 解析 BANDWIDTH 最高的流
+        // BANDWIDTH
         let mut best_bandwidth: u64 = 0;
         let mut best_url: Option<String> = None;
         let mut pending_bandwidth: Option<u64> = None;
 
         for &line in &lines {
             if let Some(attrs) = line.strip_prefix("#EXT-X-STREAM-INF:") {
-                // 去掉标签前缀后再按逗号分割，避免标签名干扰 BANDWIDTH= 匹配
+                // ， BANDWIDTH=
                 pending_bandwidth = attrs
                     .split(',')
                     .find(|seg| seg.trim_start().starts_with("BANDWIDTH="))
@@ -603,10 +603,10 @@ impl StripchatApi {
         best_url.map(|url| (url, mouflon_pairs))
     }
 
-    /// 获取主播的 HLS 播放列表 URL。
-    /// 直接对所有 CDN TLD 竞速请求 `{model_id}_auto.m3u8`，解析最高清晰度流。
-    /// 若 playlist 包含 Mouflon 加密参数，则按用户配置的 Mouflon Keys 顺序逐一比对，
-    /// 取第一个匹配的 pkey 对应的 psch 拼入 URL。
+    /// HLS  URL。
+    /// CDN TLD  `{model_id}_auto.m3u8`，。
+    /// playlist  Mouflon ， Mouflon Keys ，
+    /// pkey  psch  URL。
     ///
     /// Get the HLS playlist URL for a streamer.
     /// Races all CDN TLDs for `{model_id}_auto.m3u8` and picks the highest-quality stream.
@@ -628,12 +628,12 @@ impl StripchatApi {
         let (url, mouflon_pairs) =
             parsed.ok_or_else(|| AppError::StreamOffline(username.to_string()))?;
 
-        // 若存在 Mouflon 加密参数，则遍历用户配置的 keys，取第一个匹配的
+        // Mouflon ， keys，
         // If Mouflon encryption parameters exist, iterate user-configured keys and use the first match
         let final_url = if mouflon_pairs.is_empty() {
             url
         } else {
-            // 按 mouflon_pairs 顺序遍历，找到第一个在用户 keys 中存在的 pkey
+            // mouflon_pairs ， keys  pkey
             // Iterate mouflon_pairs in order, find the first pkey present in user keys
             let matched = mouflon_pairs
                 .iter()
@@ -645,7 +645,7 @@ impl StripchatApi {
                     format!("{}{}psch={}&pkey={}", url, sep, psch, pkey)
                 }
                 None => {
-                    // 没有匹配的 key，回退到第一个 pair（无解密密钥）
+                    // key， pair（）
                     // No matching key found, fall back to the first pair (no decryption key)
                     let (psch, pkey) = &mouflon_pairs[0];
                     let sep = if url.contains('?') { "&" } else { "?" };
@@ -659,14 +659,14 @@ impl StripchatApi {
         Ok(final_url)
     }
 
-    /// 下载 HLS 播放列表文本内容。
+    /// HLS 。
     /// Download the HLS playlist text content.
     pub async fn fetch_playlist(&self, playlist_url: &str) -> Result<String> {
         let resp = self.cdn_get(playlist_url).await?;
         Ok(resp.text().await?)
     }
 
-    /// 下载单个 HLS 分片的字节数据。
+    /// HLS 。
     /// Download the byte data of a single HLS segment.
     pub async fn download_segment(&self, url: &str) -> Result<Vec<u8>> {
         let resp = self.cdn_get(url).await?;

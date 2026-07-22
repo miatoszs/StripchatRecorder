@@ -1,7 +1,7 @@
-//! HTTP 服务器模式 / HTTP Server Mode
+//! HTTP Server Mode
 //!
-//! 基于 Axum 构建的 HTTP API 服务器，提供与 Tauri 命令等价的 REST 接口和 SSE 实时事件流。
-//! 同时内嵌前端静态资源（通过 rust-embed 编译进二进制）。
+//! Axum  HTTP API ， Tauri  REST  SSE 。
+//! （ rust-embed ）。
 //!
 //! Axum-based HTTP API server providing REST endpoints equivalent to Tauri commands,
 //! plus an SSE real-time event stream.
@@ -52,20 +52,20 @@ async fn static_handler(uri: Uri) -> impl IntoResponse {
     }
 }
 
-/// Axum 路由共享状态 / Axum router shared state
+/// Axum router shared state
 #[derive(Clone)]
 pub struct ServerState {
-    /// 应用全局状态 / Application global state
+    /// Application global state
     pub app_state: Arc<AppState>,
-    /// 录制管理器 / Recorder manager
+    /// Recorder manager
     pub recorder: Arc<RecorderManager>,
-    /// 状态监控器 / Status monitor
+    /// Status monitor
     pub monitor: Arc<StatusMonitor>,
-    /// 事件发射器 / Event emitter
+    /// Event emitter
     pub emitter: Arc<dyn crate::core::emitter::Emitter>,
-    /// SSE 广播发送端 / SSE broadcast sender
+    /// SSE broadcast sender
     pub broadcast_tx: broadcast::Sender<Event>,
-    /// 转发管理器 / Relay manager
+    /// Relay manager
     pub relay_manager: Arc<RelayManager>,
 }
 
@@ -85,7 +85,7 @@ impl IntoResponse for ApiError {
 
 type ApiResult<T> = std::result::Result<Json<T>, ApiError>;
 
-/// 构建 Axum 路由器，注册所有 API 路由和静态资源回退处理器。
+/// Axum ， API 。
 /// Build the Axum router, registering all API routes and the static asset fallback handler.
 pub fn build_router(state: ServerState) -> Router {
     let cors = CorsLayer::new()
@@ -97,17 +97,17 @@ pub fn build_router(state: ServerState) -> Router {
         app_state: Arc::clone(&state.app_state),
         relay_manager: Arc::clone(&state.relay_manager),
     };
-    // /stream/{modelname} 路由（独立 state）/ /stream/{modelname} route (independent state)
+    // /stream/{modelname} （ state）/ /stream/{modelname} route (independent state)
     let stream_router: Router<()> = Router::new()
         .route("/{modelname}", get(stream_handler))
         .with_state(relay_state.clone());
-    // /api/relay/sessions 路由 / /api/relay/sessions route
+    // /api/relay/sessions route
     let relay_api_router: Router<()> = Router::new()
         .route("/sessions", get(relay_sessions))
         .route("/{modelname}/stop", post(stop_relay_handler))
         .with_state(relay_state);
 
-    // 主路由器先固化 state，再合并转发路由
+    // state，
     // Finalize main router state first, then merge relay router
     let main_router: Router<()> = Router::new()
         .route("/api/streamers", get(list_streamers).post(add_streamer))
@@ -154,7 +154,7 @@ pub fn build_router(state: ServerState) -> Router {
         .with_state(state)
         .fallback(static_handler);
 
-    // 合并转发路由（两者都是 Router<()>，可以直接 merge）
+    // （ Router<()>， merge）
     // Merge relay routes (both are Router<()>, can merge directly)
     main_router
         .nest("/stream", stream_router)
@@ -174,7 +174,7 @@ async fn sse_handler(
                     yield Ok(sse::Event::default().data(data));
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    // 队列溢出，丢失了 n 条事件；断开连接让前端重连并恢复状态
+                    // ， n ；
                     // Queue overflow, lost n events; close connection so frontend reconnects and restores state
                     tracing::warn!("SSE broadcast lagged, {} events dropped", n);
                     let data = r#"{"event":"sse-lagged","payload":{}}"#;
@@ -421,7 +421,7 @@ async fn remove_mouflon_key(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
-/// 手动触发一次 Mouflon Keys 从 Worker 同步（忽略时间间隔，强制比对 updated_at）。
+/// Mouflon Keys  Worker （， updated_at）。
 /// Manually trigger a Mouflon Keys sync from the Worker (bypasses interval, still compares updated_at).
 async fn sync_mouflon_keys(AxumState(s): AxumState<ServerState>) -> ApiResult<serde_json::Value> {
     let settings = s.app_state.get_settings();
@@ -775,8 +775,8 @@ async fn get_module_outputs(
     Ok(Json(serde_json::to_value(outputs).unwrap()))
 }
 
-/// 返回指定语言代码的完整 locale 数据（主程序翻译 + 所有模块翻译覆盖）。
-/// 若语言文件存在但校验失败，响应中附带 `warning` 字段。
+/// locale （ + ）。
+/// ， `warning` 。
 ///
 /// Return the full locale data for the given locale code (app translations + all module overrides).
 /// If the locale file exists but fails validation, the response includes a `warning` field.
@@ -797,8 +797,8 @@ async fn get_locale_handler(Path(locale_code): Path<String>) -> ApiResult<serde_
     Ok(Json(result))
 }
 
-/// 扫描所有用户自定义语言文件，将校验失败的文件通过 SSE 推送给前端。
-/// 在服务器启动、emitter 就绪后调用一次。
+/// ， SSE 。
+/// 、emitter 。
 ///
 /// Scan all user-defined locale files and push validation failures to the frontend via SSE.
 /// Called once after server startup when the emitter is ready.
@@ -816,7 +816,7 @@ pub fn emit_locale_warnings(emitter: &Arc<dyn crate::core::emitter::Emitter>) {
     emitter.emit("locale-warnings", &payload);
 }
 
-/// 返回可用语言列表（扫描 locale/app/ 目录）。
+/// （ locale/app/ ）。
 /// Return the list of available locales (scanned from locale/app/ directory).
 async fn list_locales_handler() -> ApiResult<serde_json::Value> {
     let locales = tokio::task::spawn_blocking(
@@ -827,7 +827,7 @@ async fn list_locales_handler() -> ApiResult<serde_json::Value> {
     Ok(Json(serde_json::to_value(locales).unwrap()))
 }
 
-/// 初始化并启动 HTTP 服务器模式。
+/// HTTP 。
 /// Initialize and start the HTTP server mode.
 pub async fn run_server(port: u16) {
     let log_dir = AppState::log_dir();
@@ -837,7 +837,7 @@ pub async fn run_server(port: u16) {
 
     let app_state = AppState::new().expect("Failed to initialize app state");
 
-    // 初始化 locale 目录（首次运行时创建默认语言 JSON 文件）
+    // locale （ JSON ）
     // Initialize locale directories (create default locale JSON files on first run)
     crate::locale::manager::init_locale_dirs();
 
@@ -852,7 +852,7 @@ pub async fn run_server(port: u16) {
     crate::watcher::fs_watch::start_modules_dir_watcher(Arc::clone(&emitter));
     crate::watcher::fs_watch::start_locale_dir_watcher(Arc::clone(&emitter));
 
-    // 扫描用户自定义语言文件，将校验警告推送给前端
+    // ，
     // Scan user-defined locale files and push validation warnings to the frontend
     {
         let emitter_clone = Arc::clone(&emitter);
@@ -878,13 +878,13 @@ pub async fn run_server(port: u16) {
                 &recorder_clone,
             );
             crate::recording::recorder::startup_remove_empty_dirs(&output_dir);
-            // 扫描并补写缺失的 meta 文件
+            // meta
             // Scan and write missing meta files
             crate::recording::meta::startup_ensure_meta_files(&output_dir, &merge_format);
         });
     }
 
-    // 提前创建 restart channel，确保 poll_interval_notify_tx 在 spawn 前就已注入
+    // restart channel， poll_interval_notify_tx  spawn
     // Pre-create restart channel so poll_interval_notify_tx is available before spawning
     {
         let (restart_tx, restart_rx) = tokio::sync::mpsc::channel::<()>(1);
@@ -903,7 +903,7 @@ pub async fn run_server(port: u16) {
         crate::config::settings::schedule_config_checks(app_state_clone, emitter_clone2).await;
     });
 
-    // 启动 Mouflon Keys 自动同步调度器（启动时立即同步一次，之后每小时一次）
+    // Mouflon Keys （，）
     // Start Mouflon Keys auto-sync scheduler (once on startup, then every hour)
     {
         let app_state_clone = Arc::clone(&app_state);
@@ -915,7 +915,7 @@ pub async fn run_server(port: u16) {
         });
     }
 
-    // 启动孤立 meta 文件清理调度器（启动时立即执行一次，之后每小时一次）
+    // meta （，）
     // Start orphaned meta cleanup scheduler (once on startup, then every hour)
     {
         let output_dir = std::path::PathBuf::from(&app_state.get_settings().output_dir);
@@ -924,7 +924,7 @@ pub async fn run_server(port: u16) {
         });
     }
 
-    // 启动 meta 版本检查轮询调度器（启动时立即执行一次，之后每 5 分钟一次）
+    // meta （， 5 ）
     // Start meta version-check polling scheduler (once on startup, then every 5 minutes)
     {
         let settings = app_state.get_settings();

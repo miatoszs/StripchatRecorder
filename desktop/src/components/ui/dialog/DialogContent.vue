@@ -26,7 +26,7 @@ const delegatedProps = reactiveOmit(props, "class")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 
-// 从 $attrs 中排除 class，避免与 cn() 合并的 class 冲突
+// $attrs  class， cn()  class
 const attrsWithoutClass = computed(() => {
   const { class: _, ...rest } = useAttrs() as Record<string, unknown>
   return rest

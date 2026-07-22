@@ -2,42 +2,42 @@
 
 [简体中文](README.md) | [English](README.en.md)
 
-自托管的 Stripchat 直播录制工具，提供基于 Web 的管理界面，支持自动录制、后处理流水线和多渠道通知。
+A self-hosted Stripchat live stream recorder with a web-based management UI. Supports automatic recording, post-processing pipelines, and multi-channel notifications.
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-3.0.html)
 [![Docker Image](https://img.shields.io/docker/pulls/chantrail/stripchat-recorder)](https://hub.docker.com/r/chantrail/stripchat-recorder)
 
 ---
 
-## 功能特性
+## Features
 
-- 监控多个主播，上线时自动开始录制
-- Web UI 管理主播、录制文件和后处理任务
-- **主播查找**：通过 [camgirlfinder.net](https://camgirlfinder.net) 查找主播，支持：
-  - 人脸识别搜索：上传图片自动检测人脸，找出相似主播
-  - 名字搜索：按用户名关键词搜索
-  - 从结果卡片直接一键添加到录制列表
-  - 对任意主播发起相似人脸搜索
-- **转发流（HLS Relay）**：无需录制即可将主播直播流转发给播放器，访问 `/stream/{modelname}` 自动启动，支持多客户端同时连接
-- 支持分离式网络代理：可分别配置 Stripchat API 代理与 CDN 分片代理
-- 支持配置 Stripchat 镜像站（将请求中的 `stripchat.com` 替换为镜像域名）
-- **Mouflon HLS 解密**：支持管理 `pkey → pdkey` 密钥对，用于解密 Stripchat 加密的 HLS 分片文件名；支持配置同步 URL 自动拉取最新密钥
-- 可配置的后处理流水线，支持插件化模块：
-  - **contact_sheet** — 生成带时间戳的缩略图预览图
-  - **filter_short** — 删除低于最短时长的录制文件
-  - **notify_discord** — 通过 Discord Webhook 发送录制信息和封面图
-  - **notify_telegram** — 通过 MTProto 发送录制信息、封面图和视频（支持超过 2 GB 的大文件，支持 HTTP/SOCKS5 代理）
-- 录制文件页磁盘空间监控，剩余空间不足 5 GB 时高亮提示
-- 双运行模式：可作为 Tauri 桌面应用或无头服务器通过浏览器访问
-- 基于 SSE 的实时 UI 更新，支持多客户端同步
-- 跟随系统主题的深色/浅色模式
-- 支持自定义界面语言，详见[自定义语言文档](docs/custom-locale.md)
+- Monitor multiple streamers and auto-record when they go live
+- Web UI for managing streamers, recordings, and post-processing
+- **Streamer Finder**: discover streamers via [camgirlfinder.net](https://camgirlfinder.net), supporting:
+  - Face search: upload an image, auto-detect a face, and find similar streamers
+  - Name search: search by username keyword
+  - One-click add to recording list directly from result cards
+  - Launch a similar-face search from any streamer card
+- **HLS Relay**: proxy a streamer's live stream to any player without recording — open `/stream/{modelname}` to start automatically; supports multiple simultaneous clients
+- Supports split network proxies: configure Stripchat API proxy and CDN chunk proxy separately
+- Supports configurable Stripchat mirror site (replaces `stripchat.com` in requests with your mirror domain)
+- **Mouflon HLS decryption**: manage `pkey → pdkey` key pairs for decrypting Stripchat's encrypted HLS segment filenames; supports automatic key sync from a configured URL
+- Configurable post-processing pipeline with pluggable modules:
+  - **contact_sheet** — generates a tiled preview image with timestamps
+  - **filter_short** — deletes recordings below a minimum duration
+  - **notify_discord** — sends recording info and cover image to a Discord Webhook
+  - **notify_telegram** — sends recording info, cover image, and video via MTProto (supports files >2 GB, HTTP/SOCKS5 proxy)
+- Disk space monitoring on the recordings page, with a warning highlight when less than 5 GB remains
+- Dual runtime: Tauri desktop app or headless server accessible via browser
+- Real-time UI updates via Server-Sent Events with multi-client sync
+- Dark/light mode following system theme
+- Custom UI language support, see [Custom Locale Guide](docs/custom-locale.en.md)
 
 ---
 
-## 快速开始（Docker）
+## Quick Start (Docker)
 
-### docker-compose（推荐）
+### docker-compose (recommended)
 
 ```yaml
 services:
@@ -47,8 +47,8 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      # - LANGUAGE=en-US  # 设置界面语言，支持 zh-CN（默认）或 en-US
-      # - PORT=3030        # 设置服务端口（默认 3030）
+      # - LANGUAGE=en-US  # Set interface language: zh-CN (default) or en-US
+      # - PORT=3030        # Set server port (default: 3030)
     ports:
       - "${PORT:-3030}:${PORT:-3030}"
     volumes:
@@ -62,48 +62,48 @@ services:
 docker compose up -d
 ```
 
-启动后在浏览器中打开 `http://localhost:3030`。
+Then open `http://localhost:3030` in your browser.
 
-Docker 镜像默认以 Server 模式运行（端口 3030），配置写入挂载的 `config/settings.json`。
+The Docker image runs in Server mode by default (port 3030). Configuration is written to the mounted `config/settings.json`.
 
-### 主要设置项
+### Key Settings
 
-在 Web UI 的「设置」页面可配置以下选项：
+The following options are available in the Web UI under Settings:
 
-| 设置项                   | 说明                                                                 |
-| ------------------------ | -------------------------------------------------------------------- |
-| 输出目录                 | 录制文件保存路径                                                     |
-| 最大并发录制数           | 同时录制的最大主播数，`0` 表示不限制                                 |
-| 轮询间隔                 | 检查主播是否上线的间隔（秒），范围 10–300                            |
-| 合并格式                 | 录制结束后自动合并分片的格式：`mp4`（默认）、`mkv`、`ts`            |
-| 上线自动录制             | 新添加的主播是否默认开启自动录制                                     |
-| 后处理临时目录最大占用   | 后处理模块运行时产生的临时文件上限（GB），超出后自动删除最旧的文件，`0` 表示不限制，默认 50 GB |
+| Setting                        | Description                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------- |
+| Output directory               | Path where recordings are saved                                             |
+| Max concurrent                 | Maximum number of simultaneous recordings; `0` means unlimited             |
+| Poll interval                  | How often to check if a streamer is live (seconds), range 10–300           |
+| Merge format                   | Format for auto-merging segments after recording: `mp4` (default), `mkv`, `ts` |
+| Auto-record                    | Whether newly added streamers have auto-record enabled by default           |
+| Max post-process tmp dir (GB)  | Size limit for temporary files created by post-processing modules; oldest files are deleted when exceeded; `0` means unlimited, default 50 GB |
 
-### 网络代理与镜像站
+### Network Proxies and Mirror
 
-在设置页的「网络」中可分别配置：
+In the settings page under "Network", you can configure:
 
-Stripchat 镜像站项目：<https://github.com/ChanTrail/StripchatMirror>
+Stripchat mirror project: <https://github.com/ChanTrail/StripchatMirror>
 
-1. API 代理：用于访问 Stripchat API；若同时填写镜像站，则通过该代理访问镜像站。
-2. CDN 代理：用于下载直播分片流，可与 API 代理分开设置。
-3. Stripchat 镜像站：用于替换请求中的 `stripchat.com` 域名。
+1. API Proxy: used for Stripchat API access; if a mirror is also set, mirror requests go through this proxy.
+2. CDN Proxy: used for downloading live stream chunks; can be configured independently from the API proxy.
+3. Stripchat Mirror: replaces `stripchat.com` in requests with your mirror domain.
 
-### Mouflon HLS 解密密钥
+### Mouflon HLS Decryption Keys
 
-Stripchat 对 HLS 分片文件名进行了加密（Mouflon 系统）。若录制时遇到无法下载分片的情况，需在设置页的「Mouflon 解密密钥」中填入对应的 `pkey → pdkey` 密钥对。密钥可从社区渠道获取。
+Stripchat encrypts HLS segment filenames (the Mouflon system). If recordings fail to download segments, add the corresponding `pkey → pdkey` key pairs in Settings under "Mouflon Decryption Keys". Keys can be obtained from community channels.
 
-也可以配置「同步地址」和「同步令牌」，从指定 URL 自动拉取最新密钥。
+You can also configure a "Sync URL" and optional "Sync Token" to automatically pull the latest keys from a specified URL.
 
-### 转发流（HLS Relay）
+### HLS Relay
 
-在 Server 模式下，无需将主播添加到录制列表，直接用播放器打开以下地址即可播放直播：
+In Server mode, you can stream any streamer's live broadcast directly to a player without adding them to the recording list:
 
 ```
 http://localhost:3030/stream/{modelname}
 ```
 
-首次访问时自动连接上游，支持多个客户端同时连接同一转发流。在 Web UI 的「转发流」页面可查看所有活跃会话的状态、连接数和运行时长。
+The relay starts automatically on first access and supports multiple simultaneous clients on the same stream. The "Relay" page in the Web UI shows all active sessions with their state, connection count, and uptime.
 
 ### docker run
 
@@ -124,52 +124,52 @@ docker run -d \
 
 ---
 
-## 后处理模块
+## Post-processing Modules
 
-模块是实现了简单协议的独立可执行文件，通过环境变量接收输入，通过标准输出与主程序通信。
+Modules are standalone executables implementing a simple protocol. They receive input via environment variables and communicate with the host via stdout.
 
-### 内置模块
+### Built-in Modules
 
-| 模块              | 说明                                                |
-| ----------------- | --------------------------------------------------- |
-| `contact_sheet`   | 按配置间隔截帧并拼合为预览图                        |
-| `filter_short`    | 删除低于最短时长的录制文件                          |
-| `notify_discord`  | 通过 Discord Webhook 发送录制信息和封面图           |
-| `notify_telegram` | 通过 MTProto 向 Telegram 发送录制信息、封面图和视频 |
+| Module            | Description                                                                    |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `contact_sheet`   | Extracts frames at a configurable interval and tiles them into a preview image |
+| `filter_short`    | Deletes recordings shorter than a configurable minimum duration                |
+| `notify_discord`  | Sends recording info and cover image to a Discord Webhook                      |
+| `notify_telegram` | Sends recording info, cover image, and video to Telegram via MTProto (supports files >2 GB, HTTP/SOCKS5 proxy) |
 
-将自定义模块放入 `modules` 数据卷目录后会被自动发现，且不会在容器重启时被覆盖。详见[后处理模块开发文档](docs/module-development.md)。
+Custom modules placed in the `modules` volume directory are discovered automatically and will not be overwritten when the container restarts. See the [Module Development Guide](docs/module-development.en.md) for details.
 
 ---
 
-## 从源码构建
+## Building from Source
 
-**前置依赖：** Rust、Node.js (LTS)、ffmpeg
+**Prerequisites:** Rust, Node.js (LTS), ffmpeg
 
-### 首次启动配置
+### First-launch Setup
 
-直接运行二进制文件时，若 `config/settings.json` 中尚未配置运行模式，会自动进入命令行 TUI 引导配置：
+When running the binary directly, if no run mode has been configured in `config/settings.json`, an interactive TUI will guide you through setup:
 
-1. 选择界面语言（中文 / English）
-2. 选择运行模式（Desktop 桌面端 / Server 服务器端）
-3. Server 模式下输入监听端口（默认 3030）
+1. Select UI language (Chinese / English)
+2. Select run mode (Desktop / Server)
+3. If Server mode, enter the listen port (default 3030)
 
-配置完成后写入 `config/settings.json`，下次启动直接读取，不再弹出配置界面。
+The choices are saved to `config/settings.json` and the TUI will not appear again on subsequent launches.
 
 ```bash
-# 安装前端依赖
+# Install frontend dependencies
 npm install
 
-# 构建前端 + Tauri 二进制
+# Build frontend + Tauri binary
 npm run build
 npx tauri build --no-bundle
 
-# 构建后处理模块
+# Build post-processing modules
 for dir in modules/*/; do
   [ -f "$dir/Cargo.toml" ] && cargo build --manifest-path "$dir/Cargo.toml" --release --bins
 done
 ```
 
-### 构建 Docker 镜像
+### Build Docker image
 
 ```bash
 docker build -t chantrail/stripchat-recorder .
@@ -177,21 +177,21 @@ docker build -t chantrail/stripchat-recorder .
 
 ---
 
-## 技术栈
+## Tech Stack
 
-- **前端：** Vue 3, TypeScript, Vite, Tailwind CSS, Reka UI
-- **后端 / 桌面端：** Rust, Tauri 2
-- **后处理模块：** Rust（独立二进制）
-- **容器：** Debian, ffmpeg
-
----
-
-## 开源许可证
-
-本项目基于 [GNU 通用公共许可证 v3.0](https://www.gnu.org/licenses/old-licenses/gpl-3.0.html) 发布。
+- **Frontend:** Vue 3, TypeScript, Vite, Tailwind CSS, Reka UI
+- **Backend / Desktop:** Rust, Tauri 2
+- **Post-processing modules:** Rust (standalone binaries)
+- **Container:** Debian, ffmpeg
 
 ---
 
-## 免责声明
+## License
 
-本项目仅用于技术研究与学习交流。使用者需自行承担部署、运维与合规风险。
+This project is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/old-licenses/gpl-3.0.html).
+
+---
+
+## Disclaimer
+
+This project is intended for technical research and learning only. Users are responsible for deployment, operations, and compliance risks.

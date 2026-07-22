@@ -25,7 +25,7 @@
 	const ppStatusStore = usePpStatusStore();
 	const { toast, confirm } = useNotify();
 	const { t } = useI18n();
-	/** 是否显示添加主播对话框 / Whether to show the add streamer dialog */
+	/*Whether to show the add streamer dialog */
 	const showAdd = ref(false);
 
 	onMounted(async () => {
@@ -34,13 +34,13 @@
 	});
 
 	/**
-	 * 处理移除主播操作，先弹出确认对话框。
-	 * 删除前取消该主播所有正在进行的后处理任务，并清理合并队列状态。
+	 * ，。
+	 * ，。
 	 *
 	 * Handle remove streamer action with confirmation dialog.
 	 * Cancels all in-progress post-processing tasks and clears merge queue state before removal.
 	 *
-	 * @param username - 主播用户名 / Streamer username
+	 * Streamer username
 	 */
 	async function handleRemove(username: string) {
 		const ok = await confirm({
@@ -51,9 +51,9 @@
 		});
 		if (!ok) return;
 		try {
-			// 取消并清理该主播的后处理任务 / Cancel and clear post-processing tasks for this streamer
+			// Cancel and clear post-processing tasks for this streamer
 			await ppStatusStore.cancelAndClearForUsername(username);
-			// 清理该主播的合并队列状态 / Clear merge queue state for this streamer
+			// Clear merge queue state for this streamer
 			mergingStore.clearMergingForUsername(username);
 			await store.removeStreamer(username);
 			toast(t("home.remove.done", { username }), "success");
@@ -63,10 +63,10 @@
 	}
 
 	/**
-	 * 处理手动开始录制操作。
+	 * 。
 	 * Handle manual start recording action.
 	 *
-	 * @param username - 主播用户名 / Streamer username
+	 * Streamer username
 	 */
 	async function handleStart(username: string) {
 		try {
@@ -78,15 +78,15 @@
 	}
 
 	/**
-	 * 处理自动录制开关切换。
-	 * 若开启自动录制且主播当前可录制但未在录制，则立即开始录制。
+	 * 。
+	 * ，。
 	 *
 	 * Handle auto-record toggle.
 	 * If enabled and streamer is currently recordable but not recording, start recording immediately.
 	 *
-	 * @param username - 主播用户名 / Streamer username
-	 * @param streamer - 主播数据对象 / Streamer data object
-	 * @param enabled - 是否开启自动录制 / Whether to enable auto-record
+	 * Streamer username
+	 * Streamer data object
+	 * Whether to enable auto-record
 	 */
 	async function handleToggleAuto(
 		username: string,
@@ -105,10 +105,10 @@
 	}
 
 	/**
-	 * 处理停止录制操作，先弹出确认对话框。
+	 * ，。
 	 * Handle stop recording action with confirmation dialog.
 	 *
-	 * @param username - 主播用户名 / Streamer username
+	 * Streamer username
 	 */
 	async function handleStop(username: string) {
 		const ok = await confirm({

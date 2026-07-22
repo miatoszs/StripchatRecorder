@@ -1,31 +1,31 @@
-//! 应用错误类型定义 / Application Error Type Definitions
+//! Application Error Type Definitions
 //!
-//! 定义统一的 `AppError` 枚举，覆盖 IO、网络、JSON 解析及业务逻辑错误，
-//! 并实现 `serde::Serialize` 以便通过 Tauri 命令直接返回给前端。
+//! `AppError` ， IO、、JSON ，
+//! `serde::Serialize`  Tauri 。
 //!
 //! Defines a unified `AppError` enum covering IO, network, JSON parsing, and business logic errors,
 //! with `serde::Serialize` implemented so it can be returned directly to the frontend via Tauri commands.
 
 use std::fmt;
 
-/// 应用统一错误类型 / Unified application error type
+/// Unified application error type
 #[derive(Debug)]
 pub enum AppError {
-    /// 文件系统 IO 错误 / File system IO error
+    /// File system IO error
     Io(std::io::Error),
-    /// HTTP 网络请求错误 / HTTP network request error
+    /// HTTP network request error
     Reqwest(reqwest::Error),
-    /// JSON 序列化/反序列化错误 / JSON serialization/deserialization error
+    /// JSON serialization/deserialization error
     Json(serde_json::Error),
-    /// 直播间已下线 / Stream is offline
+    /// Stream is offline
     StreamOffline(String),
-    /// 该主播已在录制中 / Streamer is already being recorded
+    /// Streamer is already being recorded
     AlreadyRecording(String),
-    /// 该主播当前未在录制 / Streamer is not currently being recorded
+    /// Streamer is not currently being recorded
     NotRecording(String),
-    /// 用户不存在 / User not found
+    /// User not found
     UserNotFound(String),
-    /// 其他错误 / Other errors
+    /// Other errors
     Other(String),
 }
 
@@ -76,7 +76,7 @@ impl From<&str> for AppError {
     }
 }
 
-/// 序列化为错误消息字符串，使 Tauri 命令可以直接将错误返回给前端。
+/// ， Tauri 。
 /// Serializes to an error message string so Tauri commands can return errors directly to the frontend.
 impl serde::Serialize for AppError {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -87,5 +87,5 @@ impl serde::Serialize for AppError {
     }
 }
 
-/// 应用统一 Result 类型别名 / Unified Result type alias for the application
+/// Unified Result type alias for the application
 pub type Result<T> = std::result::Result<T, AppError>;

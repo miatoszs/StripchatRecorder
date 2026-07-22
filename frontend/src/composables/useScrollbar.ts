@@ -1,8 +1,8 @@
 /**
- * 隐藏式滚动条 composable / Overlay scrollbar composable
+ * Overlay scrollbar composable
  *
- * 监听目标元素的 scroll 事件，滚动时添加 .is-scrolling class 使滚动条可见，
- * 停止滚动后延迟 800ms 移除该 class，滚动条通过 CSS transition 淡出。
+ * scroll ， .is-scrolling class ，
+ * 800ms  class， CSS transition 。
  *
  * Listens to scroll events on the target element, adds .is-scrolling class while
  * scrolling to reveal the scrollbar, then removes it 800ms after scrolling stops
@@ -35,7 +35,7 @@ export function useScrollbar(elRef: Ref<HTMLElement | null>, delay = 800) {
 	watch(
 		elRef,
 		(el, prevEl) => {
-			// 清理旧元素的监听器 / Clean up listener on previous element
+			// Clean up listener on previous element
 			if (prevEl) {
 				prevEl.removeEventListener("scroll", onScroll);
 			}

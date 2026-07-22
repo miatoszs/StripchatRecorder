@@ -1,7 +1,7 @@
 /**
- * 构建脚本公共工具 / Shared build script utilities
+ * Shared build script utilities
  *
- * 供 dev.js / check.js / release.js 引用，避免重复代码。
+ * release.js 引用，避免重复代码。
  * Used by dev.js, check.js, and release.js to avoid duplication.
  */
 
@@ -11,7 +11,7 @@ const { execSync } = require("child_process");
 const path = require("path");
 const fs   = require("fs");
 
-// ── 路径常量 / Path constants ────────────────────────────────────────────────
+// Path constants ────────────────────────────────────────────────
 
 const ROOT        = path.resolve(__dirname, "..");
 const FRONTEND    = path.join(ROOT, "frontend");
@@ -20,21 +20,21 @@ const MODULES_DIR = path.join(ROOT, "modules");
 const BUILD_TMP   = path.join(ROOT, "build_tmp");
 const BUILD_OUT   = path.join(ROOT, "build");
 
-/** 后端 Cargo.toml 路径 / Backend Cargo.toml path */
+/*Backend Cargo.toml path */
 const BACKEND_MANIFEST = path.join(ROOT, "backend", "Cargo.toml");
 
-/** 后端编译产物目录 / Backend target directory */
+/*Backend target directory */
 const BACKEND_TARGET = path.join(BUILD_TMP, "backend", "target");
 
-/** Desktop (Tauri) 编译产物目录 / Desktop (Tauri) target directory */
+/*Desktop (Tauri) target directory */
 const DESKTOP_TARGET = path.join(BUILD_TMP, "desktop", "target");
 
-/** 指定模块的编译产物目录 / Target directory for a given module */
+/*Target directory for a given module */
 function moduleTarget(name) {
   return path.join(BUILD_TMP, "modules", name, "target");
 }
 
-/** 枚举所有可构建的模块名（跳过纯库 crate）/ List all buildable module names (skip pure library crates) */
+/** （ crate）/ List all buildable module names (skip pure library crates) */
 function listModules() {
   const skip = new Set(["pp_utils"]);
   return fs
@@ -44,7 +44,7 @@ function listModules() {
     );
 }
 
-// ── ANSI 颜色 / ANSI colors ──────────────────────────────────────────────────
+// ANSI colors ──────────────────────────────────────────────────
 
 const C = {
   reset:  "\x1b[0m",
@@ -54,15 +54,15 @@ const C = {
   bold:   "\x1b[1m",
 };
 
-/** 是否作为子进程被嵌套调用（由 dev/release 通过环境变量注入）
+/** （ dev/release ）
  *  Whether running as a nested subprocess (injected by dev/release via env var) */
 const NESTED = process.env.CHECK_NESTED === "1";
 
-// ── 输出工具 / Output helpers ────────────────────────────────────────────────
+// Output helpers ────────────────────────────────────────────────
 
-/** 打印脚本开头的总描述标题 / Print the overall script header
- * @param {string} title  标题 / title
- * @param {string} desc   描述 / description
+/*Print the overall script header
+ * title
+ * description
  */
 function header(title, desc) {
   if (NESTED) {
@@ -79,10 +79,10 @@ function header(title, desc) {
   }
 }
 
-/** 打印分隔线步骤标题 / Print a separator with a step title
- * @param {number} current  当前步骤编号 / current step number
- * @param {number} total    总步骤数 / total steps
- * @param {string} msg      步骤描述 / step description
+/*Print a separator with a step title
+ * current step number
+ * total steps
+ * step description
  */
 function step(current, total, msg) {
   if (NESTED) {
@@ -96,7 +96,7 @@ function step(current, total, msg) {
 }
 
 /**
- * 同步执行命令，继承 stdio / Run a command synchronously, inheriting stdio.
+ * Run a command synchronously, inheriting stdio.
  * @param {string} cmd
  * @param {import("child_process").ExecSyncOptions} [opts]
  */
@@ -104,12 +104,12 @@ function run(cmd, opts = {}) {
   execSync(cmd, { stdio: "inherit", ...opts });
 }
 
-// ── 二进制收集 / Binary collection ──────────────────────────────────────────
+// Binary collection ──────────────────────────────────────────
 
 /**
- * 收集目录顶层的所有可执行文件。
+ * 。
  * Collect all executable files at the top level of a directory.
- * Windows: *.exe；Linux/macOS: 有执行权限且无扩展名的文件。
+ * Windows: *.exe；Linux/macOS: 。
  * @param {string} releaseDir
  * @returns {string[]}
  */
@@ -125,10 +125,10 @@ function collectBinaries(releaseDir) {
   });
 }
 
-// ── 目录列表 / Directory listing ────────────────────────────────────────────
+// Directory listing ────────────────────────────────────────────
 
 /**
- * 递归打印目录内容（构建完成后展示产物）。
+ * （）。
  * Recursively print directory contents (display artifacts after build).
  * @param {string} dir
  * @param {string} [prefix]
@@ -146,10 +146,10 @@ function listDir(dir, prefix = "") {
   }
 }
 
-// ── 模块构建与检查 / Module build & check ───────────────────────────────────
+// Module build & check ───────────────────────────────────
 
 /**
- * 对所有模块执行 cargo check。
+ * cargo check。
  * Run `cargo check` for all modules.
  */
 function checkModules() {
@@ -162,11 +162,11 @@ function checkModules() {
 }
 
 /**
- * 构建所有模块并将产物二进制复制到指定目录。
+ * 。
  * Build all modules and copy output binaries to the given directory.
  *
- * @param {"debug"|"release"} profile  Cargo 构建模式 / Cargo build profile
- * @param {string} outDir              二进制复制目标目录 / Target directory for copied binaries
+ * Cargo build profile
+ * Target directory for copied binaries
  */
 function buildModules(profile, outDir) {
   const releaseFlag = profile === "release" ? " --release" : "";
@@ -188,12 +188,12 @@ function buildModules(profile, outDir) {
 }
 
 /**
- * 递归复制目录（构建完成后收集产物用）。
+ * （）。
  * Recursively copy a directory (used for collecting build artifacts).
  *
- * @param {string} src       源目录 / Source directory
- * @param {string} dst       目标目录 / Destination directory
- * @param {string} [logBase] 用于日志输出的基准路径前缀 / Base path prefix for log output
+ * Source directory
+ * Destination directory
+ * Base path prefix for log output
  */
 function copyDir(src, dst, logBase) {
   fs.mkdirSync(dst, { recursive: true });
@@ -211,10 +211,10 @@ function copyDir(src, dst, logBase) {
   }
 }
 
-// ── 前端依赖安装 / Frontend dependency install ──────────────────────────────
+// Frontend dependency install ──────────────────────────────
 
 /**
- * 安装前端 npm 依赖（每次执行脚本前调用）。
+ * npm （）。
  * Install frontend npm dependencies (called before each script runs).
  */
 function installFrontend() {
@@ -223,7 +223,7 @@ function installFrontend() {
 }
 
 /**
- * 安装 desktop npm 依赖（每次执行 desktop 脚本前调用）。
+ * desktop npm （ desktop ）。
  * Install desktop npm dependencies (called before each desktop script runs).
  */
 function installDesktop() {
@@ -231,7 +231,7 @@ function installDesktop() {
   run("npm install", { cwd: DESKTOP });
 }
 
-// ── 导出 / Exports ───────────────────────────────────────────────────────────
+// Exports ───────────────────────────────────────────────────────────
 
 module.exports = {
   ROOT,

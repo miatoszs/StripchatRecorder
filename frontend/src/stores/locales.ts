@@ -1,8 +1,8 @@
 /**
- * 可用语言列表 Store / Available Locales Store
+ * Available Locales Store
  *
- * 集中管理从后端获取的可用语言列表，供 SetupView、SettingsView 共享。
- * store 初始化时自动订阅 `locale-files-changed` 事件，文件变化后立即刷新。
+ * ， SetupView、SettingsView 。
+ * store  `locale-files-changed` ，。
  *
  * Centrally manages the available locale list fetched from the backend,
  * shared by SetupView and SettingsView.
@@ -15,13 +15,13 @@ import { fetchAvailableLocales, type LocaleEntry } from "@/i18n";
 import { on } from "@/lib/api";
 
 export const useLocalesStore = defineStore("locales", () => {
-	/** 可用语言列表 / Available locale list */
+	/*Available locale list */
 	const locales = ref<LocaleEntry[]>([]);
-	/** 是否已完成首次加载 / Whether the initial load has completed */
+	/*Whether the initial load has completed */
 	const loaded = ref(false);
 
 	/**
-	 * 从后端拉取最新的可用语言列表。
+	 * 。
 	 * Fetch the latest available locale list from the backend.
 	 */
 	async function refresh() {
@@ -29,7 +29,7 @@ export const useLocalesStore = defineStore("locales", () => {
 		loaded.value = true;
 	}
 
-	// store 创建时立即订阅文件变化事件，不依赖 App.vue 的 onMounted 时序
+	// store ， App.vue  onMounted
 	// Subscribe to file change events when store is created, independent of App.vue's onMounted timing
 	on("locale-files-changed", () => {
 		refresh();

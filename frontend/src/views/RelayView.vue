@@ -23,7 +23,7 @@
 
 	const { t } = useI18n();
 
-	// 主播真实状态 Badge 内联样式（基于 session 里的实时数据）
+	// Badge （ session ）
 	// Streamer real status badge inline style (based on real-time data from session)
 	function streamerStatusStyle(isOnline: boolean, status: string): Record<string, string> {
 		if (!isOnline) {
@@ -35,15 +35,14 @@
 		return { backgroundColor: "rgb(120 53 15)", color: "rgb(252 211 77)", borderColor: "transparent" };
 	}
 
-	// 主播真实状态文字
 	function streamerStatusLabel(isOnline: boolean, status: string): string {
 		if (!isOnline) return t("streamerCard.offline");
 		return status || t("streamerCard.offline");
 	}
 
-	// Rust serde snake_case enum 序列化格式：
-	// 无字段 variant → 字符串，如 "live" | "connecting"
-	// 有字段 variant → 对象，如 { "offline": { "status": "..." } } | { "error": { "message": "..." } }
+	// Rust serde snake_case enum ：
+	// variant → ， "live" | "connecting"
+	// variant → ， { "offline": { "status": "..." } } | { "error": { "message": "..." } }
 	type RawStreamState =
 		| "connecting"
 		| "live"
@@ -75,14 +74,14 @@
 		stream_url: string;
 	}
 
-	// 解析后的会话（stream_state 已转换为统一格式）/ Parsed session with normalized stream_state
+	// （stream_state ）/ Parsed session with normalized stream_state
 	type ParsedSession = Omit<RelaySession, "stream_state"> & { stream_state: StreamState };
 
-	// 解析后的会话列表（stream_state 已转换为统一格式）
+	// （stream_state ）
 	const sessions = ref<ParsedSession[]>([]);
 	const loading = ref(true);
 	const copiedMap = ref<Record<string, boolean>>({});
-	// 本地时钟 tick，每秒递增，用于驱动运行时间的响应式更新
+	// tick，，
 	// Local clock tick, increments every second to drive reactive uptime updates
 	const nowMs = ref(Date.now());
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -93,19 +92,19 @@
 			const raw = await call<RelaySession[]>("list_relay_sessions");
 			sessions.value = raw.map(s => ({ ...s, stream_state: parseStreamState(s.stream_state) }));
 		} catch {
-			// 静默失败 / Fail silently
+			// Fail silently
 		} finally {
 			loading.value = false;
 		}
 	}
 
-	// 根据 created_at_ms 实时计算运行时长（秒），每秒更新
+	// created_at_ms （），
 	// Compute live uptime in seconds from created_at_ms, updated every second
 	function liveUptime(session: ParsedSession): number {
 		if (session.created_at_ms > 0) {
 			return Math.max(0, Math.floor((nowMs.value - session.created_at_ms) / 1000));
 		}
-		// 回退到服务端值（兼容旧数据）/ Fall back to server value (backward compat)
+		// （）/ Fall back to server value (backward compat)
 		return session.uptime_secs;
 	}
 
@@ -137,11 +136,11 @@
 		stoppingMap.value[username] = true;
 		try {
 			await call("stop_relay", { username });
-			// 立即从本地列表移除，无需等待下次轮询
+			// ，
 			// Remove from local list immediately without waiting for next poll
 			sessions.value = sessions.value.filter(s => s.username !== username);
 		} catch {
-			// 静默失败，下次轮询会自动同步 / Fail silently; next poll will sync
+			// Fail silently; next poll will sync
 		} finally {
 			stoppingMap.value[username] = false;
 		}
@@ -173,10 +172,10 @@
 
 	onMounted(() => {
 		fetchSessions();
-		// 每 5 秒轮询一次会话列表（仅更新状态/连接数，运行时间由本地计时器驱动）
+		// 5 （/，）
 		// Poll session list every 5s (only updates state/connections; uptime driven by local timer)
 		pollTimer = setInterval(fetchSessions, 5000);
-		// 每秒更新本地时钟，驱动运行时间实时刷新
+		// ，
 		// Update local clock every second to drive live uptime refresh
 		tickTimer = setInterval(() => { nowMs.value = Date.now(); }, 1000);
 	});

@@ -1,10 +1,10 @@
-//! 流转发 Worker / Stream Relay Worker
+//! Stream Relay Worker
 //!
-//! 架构：无中间层，各状态直接输出 MPEG-TS 广播给播放器。
-//! - 上游在线：HLS fMP4 分片 → converter ffmpeg → MPEG-TS 广播
-//! - 上游离线：离线源 ffmpeg (lavfi) → MPEG-TS 广播
-//! - 状态切换时共用同一个 broadcast channel，播放器不断连。
-//!   切换瞬间时间戳会跳变，播放器通常能自动适应（重新缓冲约 1 秒）。
+//! ：， MPEG-TS 。
+//! - ：HLS fMP4  → converter ffmpeg → MPEG-TS
+//! - ： ffmpeg (lavfi) → MPEG-TS
+//! -  broadcast channel，。
+//!   ，（ 1 ）。
 
 use super::state::{RelayManager, RelayStreamState};
 use crate::config::settings::AppState;
@@ -195,8 +195,8 @@ async fn worker_loop(
     tracing::info!("Relay worker stopped for {}", username);
 }
 
-/// 离线阶段：直接用 lavfi ffmpeg 输出 MPEG-TS，无中间层。
-/// 每 5 秒检测上游状态，上线时立即返回。
+/// ： lavfi ffmpeg  MPEG-TS，。
+/// 5 ，。
 async fn feed_offline(
     username: &str,
     status_text: &str,
@@ -301,7 +301,7 @@ async fn feed_offline(
     should_continue
 }
 
-/// 在线阶段：fMP4 分片 → converter ffmpeg → MPEG-TS 直接广播，无主 ffmpeg 中间层。
+/// ：fMP4  → converter ffmpeg → MPEG-TS ， ffmpeg 。
 async fn feed_live(
     username: &str,
     initial_playlist_url: &str,
@@ -310,8 +310,8 @@ async fn feed_live(
     ts_tx: &broadcast::Sender<Arc<Vec<u8>>>,
     stop_rx: &mut mpsc::Receiver<()>,
 ) -> bool {
-    // converter: fMP4 pipe:0 → MPEG-TS pipe:1，直接广播给播放器
-    // -probesize / -analyzeduration 最小化，减少首帧延迟
+    // converter: fMP4 pipe:0 → MPEG-TS pipe:1，
+    // -analyzeduration 最小化，减少首帧延迟
     let mut converter = match tokio::process::Command::new("ffmpeg")
         .args([
             "-y",
@@ -342,7 +342,7 @@ async fn feed_live(
 
     let (conv_in_tx, mut conv_in_rx) = mpsc::channel::<Vec<u8>>(64);
 
-    // converter stdin 写入任务
+    // converter stdin
     let conv_stdin_task = tokio::spawn(async move {
         let mut stdin = converter_stdin;
         while let Some(data) = conv_in_rx.recv().await {
@@ -397,7 +397,6 @@ async fn feed_live(
             break false;
         }
 
-        // 检测设置变更
         let current_settings = app_state.get_settings();
         let current_mouflon_keys = app_state.get_mouflon_keys();
         let proxy_changed = current_settings.api_proxy_url != last_settings.api_proxy_url

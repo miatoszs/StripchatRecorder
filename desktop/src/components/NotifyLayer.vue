@@ -25,7 +25,7 @@
 	import { Button } from "@/components/ui/button";
 	import { useI18n } from "vue-i18n";
 
-	// 从 useNotify 获取对话框状态和解析函数
+	// useNotify
 	// Get dialog state and resolve function from useNotify
 	const { dialog, _resolveDialog } = useNotify();
 	const { t } = useI18n();

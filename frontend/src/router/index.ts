@@ -1,5 +1,5 @@
 /**
- * 路由配置 / Router Configuration
+ * Router Configuration
  */
 
 import { createRouter, createWebHistory } from "vue-router";
@@ -19,7 +19,7 @@ const router = createRouter({
 	],
 });
 
-// 首次启动检测：setup_done 为 false 时强制跳转到 /setup
+// ：setup_done  false  /setup
 // First-launch detection: redirect to /setup when setup_done is false
 let setupChecked = false;
 
@@ -36,7 +36,7 @@ router.beforeEach(async (to) => {
 			if (to.path === "/setup") return "/";
 		}
 	} catch {
-		// 后端未就绪时放行，页面自身会处理错误
+		// ，
 		setupChecked = true;
 	}
 

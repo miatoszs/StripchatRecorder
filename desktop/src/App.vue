@@ -41,7 +41,7 @@
 	const mainScrollEl = ref<HTMLElement | null>(null);
 	useScrollbar(mainScrollEl);
 
-	/** 侧边栏导航项配置（桌面版无流转发）/ Sidebar navigation items (desktop: no relay) */
+	/** （）/ Sidebar navigation items (desktop: no relay) */
 	const navItems = [
 		{ to: "/", labelKey: "nav.streamers" },
 		{ to: "/recordings", labelKey: "nav.recordings" },
@@ -51,22 +51,22 @@
 	];
 
 	/**
-	 * 根据参数切换文档根元素的 dark 类，实现深色/浅色主题切换。
+	 * dark ，/。
 	 * Toggle the dark class on the document root element for dark/light theme switching.
 	 *
-	 * @param dark - 是否应用深色主题 / Whether to apply dark theme
+	 * Whether to apply dark theme
 	 */
 	function applyTheme(dark: boolean) {
 		document.documentElement.classList.toggle("dark", dark);
 	}
 
-	// 监听系统主题变化 / Listen for system theme changes
+	// Listen for system theme changes
 	const mq = window.matchMedia("(prefers-color-scheme: dark)");
 	function onThemeChange(e: MediaQueryListEvent) {
 		applyTheme(e.matches);
 	}
 
-	// 事件取消订阅函数 / Event unsubscribe functions
+	// Event unsubscribe functions
 	let unlistenFfmpeg: (() => void) | null = null;
 	let unlistenReconnect: (() => void) | null = null;
 	let unlistenDisconnect: (() => void) | null = null;
@@ -74,9 +74,9 @@
 	let unlistenLocaleWarnings: (() => void) | null = null;
 
 	/**
-	 * 处理启动时的警告事件：
-	 * 1. 不存在的主播账号 -> 提示用户并自动删除
-	 * 2. 孤立的后处理记录（对应文件已删除）-> 提示用户并清理
+	 * ：
+	 * 1.  ->
+	 * 2. （）->
 	 *
 	 * Handle startup warning events:
 	 * 1. Non-existent streamer accounts -> prompt user and auto-delete
@@ -121,41 +121,41 @@
 	}
 
 	onMounted(async () => {
-		// 初始化主题并监听系统主题变化 / Initialize theme and listen for system theme changes
+		// Initialize theme and listen for system theme changes
 		applyTheme(mq.matches);
 		mq.addEventListener("change", onThemeChange);
 
-		// 从后端同步语言设置，先加载消息再切换 locale
+		// ， locale
 		// Sync language from backend, load messages before switching locale
 		try {
 			const settings = await call<{ language?: string }>("get_settings");
 			if (settings?.language) {
-				// 先加载该语言的消息，再切换 locale，保证首屏就用正确语言渲染
+				// ， locale，
 				// Load messages for the language first, then switch locale,
 				// so the first render already uses the correct language
 				const { modules: moduleLocales } = await loadLocaleFromServer(settings.language);
 				locale.value = settings.language;
 				moduleLocaleStore.setLocales(settings.language, moduleLocales);
 			} else {
-				// 无自定义语言，仍加载默认 locale 的服务器覆盖（模块翻译等）
+				// ， locale （）
 				// No custom language, still load server overrides for the default locale
 				const { modules: moduleLocales } = await loadLocaleFromServer(locale.value);
 				moduleLocaleStore.setLocales(locale.value, moduleLocales);
 			}
 		} catch {
-			// 后端未就绪时加载当前 locale 的消息作为 fallback
+			// locale  fallback
 			// Backend not ready: load current locale messages as fallback
 			const { modules: moduleLocales } = await loadLocaleFromServer(locale.value);
 			moduleLocaleStore.setLocales(locale.value, moduleLocales);
 		}
 
-		// 监听 ffmpeg 缺失警告 / Listen for ffmpeg missing warning
+		// Listen for ffmpeg missing warning
 		unlistenFfmpeg = await on("ffmpeg-missing", (payload) => {
 			const p = payload as { message: string };
 			toast(p.message, "warning");
 		});
 
-		// SSE 重连后倒计时 3 秒刷新页面，确保状态与服务器同步
+		// SSE  3 ，
 		// After SSE reconnect, countdown 3 seconds then reload to sync state with server
 		unlistenReconnect = onSseReconnect(() => {
 			const COUNTDOWN = 3;
@@ -179,15 +179,15 @@
 			}, 1000);
 		});
 
-		// 监听 SSE 断开连接 / Listen for SSE disconnect
+		// Listen for SSE disconnect
 		unlistenDisconnect = onSseDisconnect(() => {
 			toast(t("notify.disconnected"), "warning");
 		});
 
-		// 监听启动警告 / Listen for startup warnings
+		// Listen for startup warnings
 		unlistenWarnings = await on("startup-warnings", handleStartupWarnings);
 
-		// 监听自定义语言文件校验警告 / Listen for custom locale file validation warnings
+		// Listen for custom locale file validation warnings
 		unlistenLocaleWarnings = await on(
 			"locale-warnings",
 			(payload) => {
@@ -199,14 +199,14 @@
 			},
 		);
 
-		// 初始加载可用语言列表，并注册文件变化事件监听
+		// ，
 		// Load available locales and register file change event listener
 		await localesStore.refresh();
 		await localesStore.setupListeners();
 	});
 
 	onUnmounted(() => {
-		// 清理所有事件监听器 / Clean up all event listeners
+		// Clean up all event listeners
 		mq.removeEventListener("change", onThemeChange);
 		unlistenFfmpeg?.();
 		unlistenReconnect?.();

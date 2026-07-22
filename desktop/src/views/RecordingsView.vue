@@ -52,14 +52,14 @@
 	const { toast, confirm } = useNotify();
 	const { t } = useI18n();
 	const ppStore = usePostprocessStore();
-	/** 事件取消订阅函数列表 / Event unsubscribe function list */
+	/*Event unsubscribe function list */
 	const unlisteners: (() => void)[] = [];
-	/** 本地已发起删除的文件路径集合（用于过滤 recording-deleted 事件通知）/ Locally deleted paths (to filter recording-deleted notifications) */
+	/** （ recording-deleted ）/ Locally deleted paths (to filter recording-deleted notifications) */
 	const localDeletedPaths = new Set<string>();
 	/**
-	 * 删除时正在后处理的文件路径集合。
-	 * 与 localDeletedPaths 不同，此集合不在 recording-deleted 时清除，
-	 * 而是等到 postprocess-done 事件处理完后才清除，确保能正确抑制后处理失败 toast。
+	 * 。
+	 * localDeletedPaths ， recording-deleted ，
+	 * postprocess-done ， toast。
 	 *
 	 * Paths that were being post-processed when deleted.
 	 * Unlike localDeletedPaths, this set is NOT cleared on recording-deleted;
@@ -67,7 +67,7 @@
 	 */
 	const ppCancelledByDelete = new Set<string>();
 
-	/** 磁盘空间信息 / Disk space information */
+	/*Disk space information */
 	interface DiskSpace {
 		total_bytes: number;
 		available_bytes: number;
@@ -76,7 +76,7 @@
 	const diskSpace = ref<DiskSpace | null>(null);
 
 	/**
-	 * 从后端刷新磁盘空间信息。
+	 * 。
 	 * Refresh disk space information from the backend.
 	 */
 	async function refreshDiskSpace() {
@@ -85,13 +85,13 @@
 		} catch {}
 	}
 
-	/** 各文件的实时录制速度（字节/秒）/ Real-time recording speed per file (bytes/second) */
+	/** （/）/ Real-time recording speed per file (bytes/second) */
 	const recordingSpeed = ref<Record<string, number>>({});
 
-	/** 合并进度（video_path -> {out_bytes, total_bytes}）/ Merge progress per video path */
+	/** （video_path -> {out_bytes, total_bytes}）/ Merge progress per video path */
 	const mergeProgress = ref<Record<string, { out_bytes: number; total_bytes: number }>>({});
 
-	/** 分片下载统计（video_path -> {downloaded, failed}）/ Segment download stats per video path */
+	/** （video_path -> {downloaded, failed}）/ Segment download stats per video path */
 	const segmentStats = ref<Record<string, { downloaded: number; failed: number }>>({});
 
 	const rec = useRecordings();
@@ -131,9 +131,9 @@
 	} = pp;
 
 	/**
-	 * 从当前 files.value 列表中同步模块输出路径到 moduleOutputs。
-	 * 仅补充缺失的条目，不覆盖已有的（如推断值或实时更新值）。
-	 * 用于 load() 之后确保 contact_sheet 等预览图按钮能正确显示。
+	 * files.value  moduleOutputs。
+	 * ，（）。
+	 * load()  contact_sheet 。
 	 *
 	 * Sync module output paths from the current files.value list into moduleOutputs.
 	 * Only fills in missing entries; does not overwrite existing ones (e.g. inferred or live-updated values).
@@ -143,7 +143,7 @@
 		for (const f of files.value) {
 			if (f.is_recording) continue;
 			if (f.module_outputs && Object.keys(f.module_outputs).length > 0) {
-				// meta 是持久化真相来源，直接覆盖写入（与 onMounted 初始化行为一致）
+				// meta ，（ onMounted ）
 				// Meta is the persistent source of truth; overwrite directly (consistent with onMounted init)
 				moduleOutputs.value[f.path] = {
 					...moduleOutputs.value[f.path],
@@ -174,7 +174,7 @@
 	} = preview;
 
 	/**
-	 * 用系统默认程序打开录制文件。
+	 * 。
 	 * Open a recording file with the system default application.
 	 */
 	async function openFile(path: string) {
@@ -182,8 +182,8 @@
 	}
 
 	/**
-	 * 打开模块输出文件（使用预览弹窗）。
-	 * Tauri 版：通过 invoke 读取文件为 base64 data URL 后显示。
+	 * （）。
+	 * Tauri ： invoke  base64 data URL 。
 	 *
 	 * Open module output file (preview dialog).
 	 * Tauri version: reads file as base64 data URL via invoke.
@@ -200,7 +200,7 @@
 	}
 
 	/**
-	 * 删除单个录制文件（需要用户确认）。
+	 * （）。
 	 * Delete a single recording file (requires user confirmation).
 	 */
 	async function deleteFile(f: {
@@ -234,7 +234,7 @@
 	}
 
 	/**
-	 * 批量删除已选中的文件（需要用户确认）。
+	 * （）。
 	 * Batch delete selected files (requires user confirmation).
 	 */
 	async function deleteSelected() {
@@ -275,8 +275,8 @@
 	}
 
 	/**
-	 * 对所有已选中且符合条件的文件批量触发后处理。
-	 * 按录制开始时间排序，确保处理顺序一致。
+	 * 。
+	 * ，。
 	 *
 	 * Trigger post-processing for all selected eligible files in batch.
 	 * Sorted by recording start time to ensure consistent processing order.
@@ -306,7 +306,7 @@
 		}
 	}
 
-	/** 已选中文件中可触发后处理的数量 / Number of selected files eligible for post-processing */
+	/*Number of selected files eligible for post-processing */
 	const ppSelectableCount = computed(
 		() =>
 			[...selected.value].filter(
@@ -318,17 +318,17 @@
 			).length,
 	);
 
-	/** 所有正在录制文件的总录制速度（字节/秒）/ Total recording speed (bytes/second) */
+	/** （/）/ Total recording speed (bytes/second) */
 	const totalRecordingSpeed = computed(() =>
 		Object.values(recordingSpeed.value).reduce((sum, s) => sum + s, 0),
 	);
 
-	/** 正在录制的文件数量 / Number of files currently recording */
+	/*Number of files currently recording */
 	const recordingCount = computed(
 		() => files.value.filter((f) => f.is_recording).length,
 	);
 
-	/** 磁盘使用率百分比 / Disk usage percentage */
+	/*Disk usage percentage */
 	const diskUsedPct = computed(() => {
 		if (!diskSpace.value || diskSpace.value.total_bytes === 0) return 0;
 		return Math.min(
@@ -347,12 +347,12 @@
 		unlisteners.push(() => clearInterval(diskTimer));
 		if (!ppStore.pipeline?.nodes?.length) await ppStore.fetchPipeline();
 
-		// 先恢复运行中/等待中的后处理任务状态（来自内存，不依赖 meta）
+		// /（， meta）
 		// First restore running/waiting post-processing task states (from memory, independent of meta)
 		await restoreFromBackend();
 
-		// 再从文件列表的 meta status 字段初始化 done/error 状态和模块输出路径。
-		// meta 是持久化的真相来源，优先级高于推断值，直接覆盖写入。
+		// meta status  done/error 。
+		// meta ，，。
 		//
 		// Then initialize status and module output paths from meta status fields in the file list.
 		// Meta is the persistent source of truth and takes priority over inferred values.
@@ -367,7 +367,7 @@
 			} else if (f.status === "pp_running") {
 				ppStatus.value[f.path] = "running";
 			}
-			// 从 meta pp_results 恢复各模块执行结果，用于 done/error 状态下的详情展示
+			// meta pp_results ， done/error
 			// Restore per-module results from meta pp_results for detail display in done/error state
 			if (f.pp_results && f.pp_results.length > 0 &&
 				(f.status === "finish" || f.status === "pp_error")) {
@@ -398,10 +398,10 @@
 
 		unlisteners.push(
 			await on("sse-lagged", async () => {
-				// SSE 广播队列溢出，事件已丢失，重新从后端恢复完整状态
+				// SSE ，，
 				// SSE broadcast queue overflowed, events lost; restore full state from backend
 				await load();
-				// 先恢复运行中任务，再用 meta 覆盖 done/error 状态
+				// ， meta  done/error
 				// First restore running tasks, then overwrite done/error status from meta
 				await restoreFromBackend();
 				for (const f of files.value) {
@@ -478,7 +478,7 @@
 						delete recordingSpeed.value[p.path];
 					}
 					f.size_bytes = p.size_bytes;
-					// 更新分片统计 / Update segment stats
+					// Update segment stats
 					if (f.is_recording && (p.segments_downloaded != null || p.segments_failed != null)) {
 						segmentStats.value = {
 							...segmentStats.value,
@@ -509,19 +509,19 @@
 				const p = payload as { video_path?: string };
 				await load();
 				syncModuleOutputsFromFiles();
-				// 录制结束时清理速度数据 / Clean up recording speed when recording stops
+				// Clean up recording speed when recording stops
 				if (p.video_path) {
 					const nextSpeed = { ...recordingSpeed.value };
 					delete nextSpeed[p.video_path];
 					recordingSpeed.value = nextSpeed;
 				}
-				// 合并完成后清理进度数据 / Clean up merge progress after merge completes
+				// Clean up merge progress after merge completes
 				if (p.video_path) {
 					const next = { ...mergeProgress.value };
 					delete next[p.video_path];
 					mergeProgress.value = next;
 				}
-				// 录制结束时清理分片统计 / Clean up segment stats when recording stops
+				// Clean up segment stats when recording stops
 				if (p.video_path) {
 					const nextStats = { ...segmentStats.value };
 					delete nextStats[p.video_path];
@@ -620,7 +620,7 @@
 		unlisteners.forEach((fn) => fn());
 	});
 
-	/** 顶部 header 元素引用，用于动态计算表头 sticky 偏移 */
+	/**  header ， sticky  */
 	const headerEl = ref<HTMLElement | null>(null);
 	const headerHeight = ref(0);
 	let headerRo: ResizeObserver | null = null;

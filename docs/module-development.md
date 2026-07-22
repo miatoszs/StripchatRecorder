@@ -1,137 +1,135 @@
-# 后处理模块开发文档
+# Post-processing Module Development Guide
 
 [简体中文](module-development.md) | [English](module-development.en.md)
 
-本文档描述如何为 StripchatRecorder 编写自定义后处理模块。
+This document describes how to write custom post-processing modules for StripchatRecorder.
 
 ---
 
-## 目录
+## Table of Contents
 
-1. [概述](#概述)
-2. [模块协议](#模块协议)
-3. [元数据描述](#元数据描述)
-4. [参数类型](#参数类型)
-5. [多语言支持](#多语言支持)
-6. [流水线机制](#流水线机制)
-7. [进度上报](#进度上报)
-8. [pp_utils 工具库](#pp_utils-工具库)
-9. [完整示例](#完整示例)
-10. [部署模块](#部署模块)
-11. [内置模块](#内置模块)
-12. [注意事项](#注意事项)
+1. [Overview](#overview)
+2. [Module Protocol](#module-protocol)
+3. [Metadata Descriptor](#metadata-descriptor)
+4. [Parameter Types](#parameter-types)
+5. [Internationalization (i18n)](#internationalization-i18n)
+6. [Pipeline Mechanics](#pipeline-mechanics)
+7. [Progress Reporting](#progress-reporting)
+8. [pp_utils Library](#pp_utils-library)
+9. [Full Example](#full-example)
+10. [Deploying a Module](#deploying-a-module)
+11. [Built-in Modules](#built-in-modules)
+12. [Notes](#notes)
 
----
+## Overview
 
-## 概述
-
-后处理模块是**独立的可执行文件**，由主程序在录制完成后按流水线顺序依次调用。每个模块通过环境变量接收输入，通过标准输出与主程序通信。模块可以用任何语言编写，只要遵守本文档定义的协议即可。
+Post-processing modules are **standalone executables** invoked sequentially by the host application after a recording completes. Each module receives its input via environment variables and communicates with the host via stdout. Modules can be written in any language as long as they follow the protocol defined in this document.
 
 ---
 
-## 模块协议
+## Module Protocol
 
-### 调用约定
+### Invocation
 
-主程序通过以下方式调用模块：
+The host invokes a module as follows:
 
 ```
 PP_INPUT=<path>  PP_PARAM_<KEY>=<value> ...  ./<module_binary>
 ```
 
-模块必须支持两种调用模式：
+A module must support two invocation modes:
 
-| 模式     | 命令                    | 说明                                |
-| -------- | ----------------------- | ----------------------------------- |
-| 描述模式 | `./<module> --describe` | 输出模块元数据 JSON，不执行任何处理 |
-| 执行模式 | `./<module>`            | 读取环境变量并执行处理逻辑          |
+| Mode     | Command                 | Description                                        |
+| -------- | ----------------------- | -------------------------------------------------- |
+| Describe | `./<module> --describe` | Output module metadata JSON, perform no processing |
+| Execute  | `./<module>`            | Read env vars and execute processing logic         |
 
-### 环境变量
+### Environment Variables
 
-| 变量             | 必填 | 说明                                       |
-| ---------------- | ---- | ------------------------------------------ |
-| `PP_INPUT`       | 是   | 输入视频文件的绝对路径                     |
-| `PP_PARAM_<KEY>` | 否   | 模块参数，`<KEY>` 为参数键名的大写形式     |
-| `PP_EXE_DIR`     | 否   | 模块二进制文件所在目录，可用于存放临时文件 |
+| Variable         | Required | Description                                                   |
+| ---------------- | -------- | ------------------------------------------------------------- |
+| `PP_INPUT`       | Yes      | Absolute path to the input video file                         |
+| `PP_PARAM_<KEY>` | No       | Module parameter; `<KEY>` is the uppercased parameter key     |
+| `PP_EXE_DIR`     | No       | Directory containing the module binary, useful for temp files |
 
-### 标准输出协议
+### Stdout Protocol
 
-模块通过向标准输出写入特定前缀的行与主程序通信：
+The module communicates with the host by writing lines with specific prefixes to stdout:
 
-| 输出行                    | 说明                                                                                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `OUTPUT:<path>`           | **必须输出一次**。将 `<path>` 作为下一个模块的输入传递。若模块删除了文件（如 `filter_short`），则不输出此行，流水线后续模块将被跳过。 |
-| `DELETE_INPUT`            | 请求主程序删除 `PP_INPUT` 文件。输出此行后**不得**再输出 `OUTPUT:` 行，流水线将被中止。                                               |
-| `PROGRESS:<done>/<total>` | 进度上报，`done` 和 `total` 均为整数，`total` 固定为 `10000`（即 `done=5000` 表示 50%）。                                             |
-| `STATUS:<text>`           | 可选的状态文字（如上传速度），显示在 UI 的进度条旁。                                                                                  |
-| `SKIP:<reason>`           | 可选。通知主程序本模块已跳过处理（如输出文件已存在），仍需输出 `OUTPUT:` 行。                                                         |
+| Output line               | Description                                                                                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OUTPUT:<path>`           | **Must be emitted once.** Passes `<path>` as input to the next module. If the module deletes the file (e.g. `filter_short`), omit this line and subsequent modules will be skipped. |
+| `DELETE_INPUT`            | Requests the host to delete the `PP_INPUT` file. The module must **not** emit `OUTPUT:` after this line; the pipeline will be aborted.                                              |
+| `PROGRESS:<done>/<total>` | Progress report; both values are integers, `total` is always `10000` (i.e. `done=5000` means 50%).                                                                                  |
+| `STATUS:<text>`           | Optional status text (e.g. upload speed), shown next to the progress bar in the UI.                                                                                                 |
+| `SKIP:<reason>`           | Optional. Notifies the host that processing was skipped (e.g. output already exists). Still requires an `OUTPUT:` line.                                                             |
 
-非协议行（不以上述前缀开头的行）会被主程序忽略。
+Lines not starting with one of the above prefixes are ignored by the host.
 
-### 标准错误
+### Stderr
 
-所有诊断信息、警告和错误消息应写入标准错误（stderr）。主程序会捕获 stderr 内容并在模块失败时展示给用户。
+All diagnostic messages, warnings, and errors should be written to stderr. The host captures stderr and displays it to the user when a module fails.
 
-### 退出码
+### Exit Code
 
-| 退出码 | 含义                               |
-| ------ | ---------------------------------- |
-| `0`    | 成功                               |
-| 非零   | 失败，流水线中止，后续模块不再执行 |
+| Exit code | Meaning                                                           |
+| --------- | ----------------------------------------------------------------- |
+| `0`       | Success                                                           |
+| Non-zero  | Failure; pipeline is aborted, subsequent modules are not executed |
 
 ---
 
-## 元数据描述
+## Metadata Descriptor
 
-当以 `--describe` 参数调用时，模块必须向标准输出打印一个 JSON 对象，然后以退出码 `0` 退出。
+When invoked with `--describe`, the module must print a JSON object to stdout and exit with code `0`.
 
-### JSON 结构
+### JSON Schema
 
 ```jsonc
 {
-	"id": "my_module", // 模块唯一标识符，仅含小写字母、数字和下划线
-	"name": "我的模块", // UI 中显示的名称
-	"description": "模块功能描述", // UI 中显示的简短描述
+	"id": "my_module", // Unique identifier, lowercase letters, digits, underscores only
+	"name": "My Module", // Display name shown in the UI
+	"description": "Does X", // Short description shown in the UI
 	"params": [
-		// 参数列表，可为空数组
+		// Parameter list, may be empty array
 		{
-			"key": "param_key", // 参数键名，对应环境变量 PP_PARAM_PARAM_KEY
-			"label": "参数标签", // UI 中显示的标签
-			"type": "string", // 参数类型，见下文
-			"default": "", // 默认值
+			"key": "param_key", // Parameter key, maps to env var PP_PARAM_PARAM_KEY
+			"label": "Param Label", // Label shown in the UI
+			"type": "string", // Parameter type, see below
+			"default": "", // Default value
 		},
 	],
 }
 ```
 
-### 字段说明
+### Field Reference
 
-| 字段          | 类型   | 必填 | 说明                              |
-| ------------- | ------ | ---- | --------------------------------- |
-| `id`          | string | 是   | 模块唯一 ID，在同一实例中不可重复 |
-| `name`        | string | 是   | UI 显示名称                       |
-| `description` | string | 是   | UI 显示描述                       |
-| `params`      | array  | 是   | 参数定义列表，无参数时传空数组    |
+| Field         | Type   | Required | Description                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------------ |
+| `id`          | string | Yes      | Unique module ID, must not conflict within the same instance |
+| `name`        | string | Yes      | Display name in the UI                                       |
+| `description` | string | Yes      | Description in the UI                                        |
+| `params`      | array  | Yes      | Parameter definitions; pass empty array if none              |
 
 ---
 
-## 参数类型
+## Parameter Types
 
-`params` 数组中每个对象的 `type` 字段决定 UI 渲染方式和环境变量的值格式。
+The `type` field of each param object determines how the UI renders it and the format of the env var value.
 
-| 类型      | UI 控件    | 环境变量值格式           |
-| --------- | ---------- | ------------------------ |
-| `string`  | 文本输入框 | 任意字符串               |
-| `number`  | 数字输入框 | 十进制整数或浮点数字符串 |
-| `boolean` | 开关       | `"true"` 或 `"false"`    |
-| `select`  | 下拉选择框 | 选项值字符串             |
+| Type      | UI Control      | Env var value format            |
+| --------- | --------------- | ------------------------------- |
+| `string`  | Text input      | Any string                      |
+| `number`  | Number input    | Decimal integer or float string |
+| `boolean` | Toggle switch   | `"true"` or `"false"`           |
+| `select`  | Dropdown select | One of the option value strings |
 
-`select` 类型需额外提供 `options` 字段：
+`select` type requires an additional `options` field:
 
 ```jsonc
 {
 	"key": "format",
-	"label": "输出格式",
+	"label": "Output Format",
 	"type": "select",
 	"default": "webp",
 	"options": ["webp", "jpg", "png"],
@@ -140,16 +138,16 @@ PP_INPUT=<path>  PP_PARAM_<KEY>=<value> ...  ./<module_binary>
 
 ---
 
-## 多语言支持
+## Internationalization (i18n)
 
-模块可以在 DESCRIBE JSON 中声明可选的 `i18n` 字段，为 `name`、`description` 和参数 `label` 提供多语言翻译。主程序会根据用户当前的界面语言自动选择对应翻译，找不到时回退到原始字段值。
+Modules can declare an optional `i18n` field in their DESCRIBE JSON to provide translations for `name`, `description`, and parameter `label` values. The host automatically selects the translation matching the user's current UI language, falling back to the original field values when no translation is found.
 
-### JSON 结构
+### JSON Schema
 
 ```jsonc
 {
 	"id": "my_module",
-	"name": "我的模块", // 默认语言（中文）
+	"name": "我的模块", // default language (Chinese)
 	"description": "模块功能描述",
 	"params": [
 		{
@@ -167,40 +165,40 @@ PP_INPUT=<path>  PP_PARAM_<KEY>=<value> ...  ./<module_binary>
 				"dest_dir": { "label": "Destination Directory" }
 			}
 		}
-		// 可继续添加其他语言，如 "ja-JP": { ... }
+		// additional locales can be added, e.g. "ja-JP": { ... }
 	}
 }
 ```
 
-### 字段说明
+### Field Reference
 
-`i18n` 对象的键为 BCP 47 语言标签（如 `"en-US"`、`"ja-JP"`），值为该语言的翻译对象：
+Keys in the `i18n` object are BCP 47 language tags (e.g. `"en-US"`, `"ja-JP"`). Each value is a translation object:
 
-| 字段          | 类型   | 必填 | 说明                                                   |
-| ------------- | ------ | ---- | ------------------------------------------------------ |
-| `name`        | string | 否   | 该语言下的模块名称，省略时使用顶层 `name`              |
-| `description` | string | 否   | 该语言下的模块描述，省略时使用顶层 `description`       |
-| `params`      | object | 否   | 键为参数 `key`，值为 `{ "label": "..." }`，省略时使用参数原始 `label` |
+| Field         | Type   | Required | Description                                                                                    |
+| ------------- | ------ | -------- | ---------------------------------------------------------------------------------------------- |
+| `name`        | string | No       | Module name in this locale; falls back to top-level `name` if omitted                         |
+| `description` | string | No       | Module description in this locale; falls back to top-level `description` if omitted            |
+| `params`      | object | No       | Keys are parameter `key` values, values are `{ "label": "..." }`; falls back to original label |
 
-所有翻译字段均为可选，未提供的字段自动回退到原始值，因此可以只翻译部分字段。
+All translation fields are optional. Any omitted field automatically falls back to its original value, so partial translations are fully supported.
 
 ---
 
-## 流水线机制
+## Pipeline Mechanics
 
-流水线由一组有序的模块节点组成。主程序按顺序执行每个已启用的节点：
+A pipeline consists of an ordered list of module nodes. The host executes each enabled node in sequence:
 
-1. 将上一个模块输出的 `OUTPUT:` 路径作为下一个模块的 `PP_INPUT`。第一个模块的 `PP_INPUT` 为录制完成的原始视频路径。
-2. 若某个模块退出码非零，流水线立即中止，后续模块不再执行。
-3. 若某个模块未输出 `OUTPUT:` 行（例如文件已被删除），流水线同样中止。
+1. The `OUTPUT:` path from the previous module becomes the `PP_INPUT` for the next. The first module's `PP_INPUT` is the path of the completed recording.
+2. If a module exits with a non-zero code, the pipeline aborts immediately and subsequent modules are not executed.
+3. If a module emits no `OUTPUT:` line (e.g. the file was deleted), the pipeline also aborts.
 
 ```
-录制完成
+Recording done
     │
     ▼  PP_INPUT=/recordings/alice_20240101_120000.ts
 ┌─────────────┐
-│ filter_short│ ── 时长不足，删除文件，不输出 OUTPUT → 流水线终止
-│             │ ── 时长满足 → OUTPUT:/recordings/alice_20240101_120000.ts
+│ filter_short│ ── too short, file deleted, no OUTPUT → pipeline aborts
+│             │ ── duration ok → OUTPUT:/recordings/alice_20240101_120000.ts
 └─────────────┘
     │
     ▼  PP_INPUT=/recordings/alice_20240101_120000.ts
@@ -213,14 +211,14 @@ PP_INPUT=<path>  PP_PARAM_<KEY>=<value> ...  ./<module_binary>
 │ notify_discord │ ── OUTPUT:/recordings/alice_20240101_120000.ts
 └────────────────┘
     │
-   完成
+   Done
 ```
 
 ---
 
-## 进度上报
+## Progress Reporting
 
-进度通过向 stdout 输出 `PROGRESS:<done>/<total>` 行来上报，其中 `total` 固定为 `10000`。
+Progress is reported by writing `PROGRESS:<done>/<total>` lines to stdout, where `total` is always `10000`.
 
 ```
 PROGRESS:0/10000      # 0%
@@ -228,49 +226,49 @@ PROGRESS:5000/10000   # 50%
 PROGRESS:10000/10000  # 100%
 ```
 
-**注意事项：**
+**Notes:**
 
-- 主程序会取所有上报值中的最大值，进度不会倒退。
-- 建议在处理开始前输出 `PROGRESS:0/10000`，结束后输出 `PROGRESS:10000/10000`。
-- 对于固定步骤的任务，可按步骤均分进度（如 3 步：0、3333、6666、10000）。
+- The host tracks the maximum reported value; progress never goes backwards.
+- Emit `PROGRESS:0/10000` before processing starts and `PROGRESS:10000/10000` when done.
+- For fixed-step tasks, divide progress evenly (e.g. 3 steps: 0, 3333, 6666, 10000).
 
 ---
 
-## pp_utils 工具库
+## pp_utils Library
 
-`pp_utils` 是项目内置的 Rust 工具库，封装了所有模块常用的功能。使用 Rust 编写模块时强烈建议依赖此库。
+`pp_utils` is the project's built-in Rust utility library encapsulating common functionality for all modules. It is strongly recommended for Rust-based modules.
 
-在 `Cargo.toml` 中引入：
+Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
 pp_utils = { path = "../pp_utils" }
 ```
 
-### 读取参数
+### Reading Parameters
 
 ```rust
 use pp_utils::{param, param_u32, param_f64, param_bool};
 
-let url: String   = param("webhook_url", "");        // 字符串参数
-let interval: u32 = param_u32("interval", 30);       // u32 参数
-let min_dur: f64  = param_f64("min_duration", 60.0); // f64 参数
-let dry_run: bool = param_bool("dry_run", false);    // 布尔参数（"true"/"1"/"yes" 均视为 true）
+let url: String   = param("webhook_url", "");        // string parameter
+let interval: u32 = param_u32("interval", 30);       // u32 parameter
+let min_dur: f64  = param_f64("min_duration", 60.0); // f64 parameter
+let dry_run: bool = param_bool("dry_run", false);    // bool ("true"/"1"/"yes" → true)
 ```
 
-参数键名不区分大小写，`param("interval", ...)` 对应环境变量 `PP_PARAM_INTERVAL`。
+Parameter keys are case-insensitive; `param("interval", ...)` maps to env var `PP_PARAM_INTERVAL`.
 
-### 视频工具
+### Video Utilities
 
 ```rust
 use pp_utils::video_duration;
 use std::path::Path;
 
-// 通过 ffprobe 获取视频时长（秒），ffprobe 不可用时返回 None
+// Get video duration in seconds via ffprobe; returns None if ffprobe is unavailable
 let duration: Option<f64> = video_duration(Path::new("/path/to/video.ts"));
 ```
 
-### 格式化工具
+### Formatting Utilities
 
 ```rust
 use pp_utils::{format_duration, format_bytes, format_speed};
@@ -280,9 +278,9 @@ format_bytes(1_500_000);   // "1.43 MB"
 format_speed(1_048_576.0); // "↑ 1.0 MB/s"
 ```
 
-### 文件名解析
+### Filename Parsing
 
-录制文件名格式为 `{model_name}_{YYYYMMDD}_{HHmmss}`。
+Recording filenames follow the format `{model_name}_{YYYYMMDD}_{HHmmss}`.
 
 ```rust
 use pp_utils::parse_stem;
@@ -290,63 +288,63 @@ use pp_utils::parse_stem;
 let (model, timestamp) = parse_stem("alice_20240101_120000");
 // model = "alice", timestamp = "2024-01-01 12:00:00"
 
-// 含下划线的主播名同样支持
+// Model names with underscores are also supported
 let (model, timestamp) = parse_stem("my_streamer_20240101_120000");
 // model = "my_streamer", timestamp = "2024-01-01 12:00:00"
 ```
 
-### 封面图查找
+### Cover Image Lookup
 
-在视频同目录下查找同名封面图，支持 `jpg`、`jpeg`、`webp`、`png`。
+Finds a cover image with the same stem in the same directory as the video. Supports `jpg`, `jpeg`, `webp`, `png`.
 
 ```rust
 use pp_utils::find_cover;
 use std::path::Path;
 
 let cover: Option<PathBuf> = find_cover(Path::new("/recordings/alice_20240101_120000.ts"));
-// 若存在则返回 /recordings/alice_20240101_120000.webp 等
+// Returns e.g. /recordings/alice_20240101_120000.webp if it exists
 ```
 
-### 图片与视频元数据
+### Image and Video Metadata
 
 ```rust
 use pp_utils::{image_dimensions, video_meta};
 use std::path::Path;
 
-// 通过 ffprobe 获取图片宽高
+// Get image width and height via ffprobe
 let dims: Option<(u32, u32)> = image_dimensions(Path::new("/recordings/cover.webp"));
-// 返回 Some((1280, 720)) 或 None
+// Returns Some((1280, 720)) or None
 
-// 一次调用获取视频时长、宽度和高度
+// Get video duration, width, and height in one call
 let meta: Option<(f64, i32, i32)> = video_meta(Path::new("/recordings/alice_20240101_120000.ts"));
-// 返回 Some((时长秒数, 宽度, 高度)) 或 None
+// Returns Some((duration_secs, width, height)) or None
 ```
 
-### 临时目录
+### Temporary Directory
 
-返回 `PP_EXE_DIR` 下的 `tmp/` 子目录（若未设置 `PP_EXE_DIR` 则使用模块二进制文件所在目录）。目录会自动创建。
+Returns a writable `tmp/` subdirectory under `PP_EXE_DIR` (or next to the module binary if `PP_EXE_DIR` is not set). The directory is created automatically.
 
 ```rust
 use pp_utils::tmp_dir;
 
 let tmp: PathBuf = tmp_dir();
-// 例如 /app/stripchat-recorder/modules/tmp/
+// e.g. /app/stripchat-recorder/modules/tmp/
 ```
 
-### 进度上报
+### Progress Reporting
 
 ```rust
 use pp_utils::{emit_progress, emit_progress_step, PROGRESS_SCALE};
 
-// PROGRESS_SCALE = 10_000，可用于手动构造进度输出
+// PROGRESS_SCALE = 10_000, can be used to manually construct progress output
 println!("PROGRESS:0/{}", PROGRESS_SCALE);
 
-// 按已完成量/总量上报（自动缩放到 10000）
+// Report by done/total (auto-scaled to 10000)
 emit_progress(0, 100);   // PROGRESS:0/10000
 emit_progress(50, 100);  // PROGRESS:5000/10000
 emit_progress(100, 100); // PROGRESS:10000/10000
 
-// 按固定步骤上报
+// Report by fixed steps
 emit_progress_step(0, 3); // PROGRESS:0/10000
 emit_progress_step(1, 3); // PROGRESS:3333/10000
 emit_progress_step(2, 3); // PROGRESS:6667/10000
@@ -355,9 +353,9 @@ emit_progress_step(3, 3); // PROGRESS:10000/10000
 
 ---
 
-## 完整示例
+## Full Example
 
-以下是一个完整的 Rust 模块示例，功能为将视频文件复制到指定目录。
+A complete Rust module that copies the video file to a specified directory.
 
 ### `Cargo.toml`
 
@@ -384,22 +382,22 @@ use std::path::PathBuf;
 
 const DESCRIBE: &str = r#"{
   "id": "copy_to_dir",
-  "name": "复制到目录",
-  "description": "将录制文件复制到指定目录",
+  "name": "Copy to Directory",
+  "description": "Copies the recording to a specified directory",
   "params": [
     {
       "key": "dest_dir",
-      "label": "目标目录路径",
+      "label": "Destination Directory",
       "type": "string",
       "default": ""
     }
   ],
   "i18n": {
-    "en-US": {
-      "name": "Copy to Directory",
-      "description": "Copies the recording to a specified directory",
+    "zh-CN": {
+      "name": "复制到目录",
+      "description": "将录制文件复制到指定目录",
       "params": {
-        "dest_dir": { "label": "Destination Directory" }
+        "dest_dir": { "label": "目标目录路径" }
       }
     }
   }
@@ -431,7 +429,7 @@ fn run() -> Result<(), String> {
 
     emit_progress_step(2, 2);
 
-    // 输出原始文件路径，传递给下一个模块
+    // Pass the original file path to the next module
     println!("OUTPUT:{}", input.display());
     Ok(())
 }
@@ -449,87 +447,87 @@ fn main() {
 }
 ```
 
-### 构建
+### Build
 
 ```bash
 cargo build --release --bins
-# 产物位于 target/release/copy_to_dir
+# Binary at target/release/copy_to_dir
 ```
 
 ---
 
-## 部署模块
+## Deploying a Module
 
-将编译好的模块二进制文件放入 Docker 的 `modules` 目录即可被自动发现。
+Place the compiled module binary into the `modules` Docker volume directory to be discovered automatically.
 
 ```bash
-# 将二进制文件复制到宿主机的 modules 目录
+# Copy the binary to the host modules directory
 cp ./copy_to_dir ./data/modules/copy_to_dir
 chmod +x ./data/modules/copy_to_dir
 ```
 
-完成后在 Web UI 的「设置 → 后处理流水线」中即可看到并启用新模块。
+After copying, the new module will appear in the Web UI under Settings → Post-processing Pipeline.
 
-> **注意：** 每次容器启动时，`modules.default` 中在 `modules` 里尚不存在的文件会被补充复制进来，已存在的文件不会被覆盖。因此自定义模块和手动替换的内置模块在重启后均会保留。
-
----
-
-## 内置模块
-
-项目自带以下四个模块，位于 `modules/` 目录，容器启动时会自动复制到 `modules.default/`。
-
-| 模块 ID           | 说明                                                                 |
-| ----------------- | -------------------------------------------------------------------- |
-| `filter_short`    | 请求主程序删除时长低于阈值的视频，支持 `dry_run` 预览模式            |
-| `contact_sheet`   | 按指定间隔截帧，拼合成带时间戳水印的预览图，保存到视频同目录         |
-| `notify_discord`  | 将录制信息和封面图通过 Webhook 发送到 Discord，支持 HTTP/SOCKS5 代理 |
-| `notify_telegram` | 通过 MTProto 将录制信息、封面图和视频发送到 Telegram，支持超过 2GB 的大文件自动分割 |
-
-### filter_short 参数
-
-| 参数           | 类型    | 默认值 | 说明                         |
-| -------------- | ------- | ------ | ---------------------------- |
-| `min_duration` | number  | `60`   | 最短时长（秒），低于此值删除 |
-| `dry_run`      | boolean | `false`| 仅预览，不实际删除           |
-
-### contact_sheet 参数
-
-| 参数         | 类型   | 默认值  | 说明                                   |
-| ------------ | ------ | ------- | -------------------------------------- |
-| `interval`   | number | `30`    | 截帧间隔（秒）                         |
-| `thumb_width`| number | `320`   | 单帧宽度（px）                         |
-| `format`     | select | `webp`  | 图片格式：`webp`、`jpg`、`png`         |
-| `quality`    | number | `100`   | 图片质量（1-100，jpg/webp 有效）       |
-| `cols`       | number | `0`     | 列数，`0` 为自动                       |
-| `rows`       | number | `0`     | 行数，`0` 为自动                       |
-| `fontfile`   | string | `""`    | 字体文件路径，留空自动检测             |
-| `fontsize`   | number | `18`    | 时间戳字号                             |
-
-### notify_discord 参数
-
-| 参数          | 类型   | 默认值          | 说明                              |
-| ------------- | ------ | --------------- | --------------------------------- |
-| `webhook_url` | string | `""`            | Discord Webhook URL（必填）       |
-| `proxy`       | string | `""`            | 代理地址，支持 `http://`、`socks5://` |
-| `username`    | string | `Recorder Bot`  | Bot 显示名称                      |
-
-### notify_telegram 参数
-
-| 参数          | 类型    | 默认值  | 说明                                              |
-| ------------- | ------- | ------- | ------------------------------------------------- |
-| `api_id`      | string  | `""`    | Telegram API ID（从 my.telegram.org 获取，必填）  |
-| `api_hash`    | string  | `""`    | Telegram API Hash（必填）                         |
-| `bot_token`   | string  | `""`    | Bot Token（从 @BotFather 获取，必填）             |
-| `chat_id`     | string  | `""`    | Chat ID，超级群组格式为 `-100xxxxxxxxxx`（必填）  |
-| `username`    | string  | `""`    | 群组 Username，超级群组必填（不含 `@`）           |
-| `proxy`       | string  | `""`    | 代理地址，支持 `http://`、`socks5://`             |
-| `send_video`  | boolean | `true`  | 是否同时发送视频文件                              |
+> **Note:** On every container start, files from `modules.default` that do not yet exist in `modules` are copied in. Existing files are never overwritten, so custom modules and manually replaced built-in modules are preserved across restarts.
 
 ---
 
-## 注意事项
+## Built-in Modules
 
-- 模块应为**无状态**的，不依赖上次执行的任何残留状态。
-- 模块不应修改或删除 `PP_INPUT` 以外的文件，除非这是其明确功能（如 `filter_short`）。
-- 若模块需要临时文件，建议使用 `PP_EXE_DIR/tmp/` 目录，并在退出前清理。
-- 模块必须在合理时间内完成，长时间无进度输出可能导致 UI 显示异常。
+The project ships four modules under `modules/`, which are automatically copied to `modules.default/` on container start.
+
+| Module ID         | Description                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `filter_short`    | Requests the host to delete videos shorter than a threshold; supports `dry_run` preview mode |
+| `contact_sheet`   | Extracts frames at a set interval and tiles them into a timestamped preview image        |
+| `notify_discord`  | Sends recording info and cover image to Discord via Webhook; supports HTTP/SOCKS5 proxy  |
+| `notify_telegram` | Sends recording info, cover image, and video to Telegram via MTProto; auto-splits files over 2 GB |
+
+### filter_short parameters
+
+| Parameter      | Type    | Default | Description                                    |
+| -------------- | ------- | ------- | ---------------------------------------------- |
+| `min_duration` | number  | `60`    | Minimum duration in seconds; shorter files are deleted |
+| `dry_run`      | boolean | `false` | Preview only, no actual deletion               |
+
+### contact_sheet parameters
+
+| Parameter    | Type   | Default | Description                                      |
+| ------------ | ------ | ------- | ------------------------------------------------ |
+| `interval`   | number | `30`    | Frame extraction interval (seconds)              |
+| `thumb_width`| number | `320`   | Thumbnail width (px)                             |
+| `format`     | select | `webp`  | Image format: `webp`, `jpg`, or `png`            |
+| `quality`    | number | `100`   | Image quality (1–100, applies to jpg/webp)       |
+| `cols`       | number | `0`     | Number of columns; `0` = auto                   |
+| `rows`       | number | `0`     | Number of rows; `0` = auto                      |
+| `fontfile`   | string | `""`    | Font file path; leave empty for auto-detection  |
+| `fontsize`   | number | `18`    | Timestamp font size                              |
+
+### notify_discord parameters
+
+| Parameter     | Type   | Default        | Description                                      |
+| ------------- | ------ | -------------- | ------------------------------------------------ |
+| `webhook_url` | string | `""`           | Discord Webhook URL (required)                   |
+| `proxy`       | string | `""`           | Proxy address; supports `http://` and `socks5://`|
+| `username`    | string | `Recorder Bot` | Bot display name                                 |
+
+### notify_telegram parameters
+
+| Parameter    | Type    | Default | Description                                                    |
+| ------------ | ------- | ------- | -------------------------------------------------------------- |
+| `api_id`     | string  | `""`    | Telegram API ID from my.telegram.org (required)                |
+| `api_hash`   | string  | `""`    | Telegram API Hash (required)                                   |
+| `bot_token`  | string  | `""`    | Bot Token from @BotFather (required)                           |
+| `chat_id`    | string  | `""`    | Chat ID; supergroup format: `-100xxxxxxxxxx` (required)        |
+| `username`   | string  | `""`    | Group username, required for supergroups (without `@`)         |
+| `proxy`      | string  | `""`    | Proxy address; supports `http://` and `socks5://`              |
+| `send_video` | boolean | `true`  | Also send the video file                                       |
+
+---
+
+## Notes
+
+- Modules should be **stateless** and not rely on any residual state from previous executions.
+- Modules should not modify or delete files other than `PP_INPUT` unless that is their explicit purpose (e.g. `filter_short`).
+- If a module needs temporary files, use `PP_EXE_DIR/tmp/` and clean up before exiting.
+- Modules must complete within a reasonable time; prolonged absence of progress output may cause the UI to appear stalled.

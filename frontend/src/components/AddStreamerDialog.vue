@@ -37,24 +37,24 @@
 	const loading = ref(false);
 
 	/**
-	 * 从输入中提取用户名：支持直接输入用户名、stripchat.com 链接或 mirror 链接。
+	 * ：、stripchat.com  mirror 。
 	 * Extract username from input: supports plain username, stripchat.com URL, or mirror URL.
 	 */
 	function extractUsername(input: string): string {
 		const trimmed = input.trim();
 		try {
 			const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
-			// 匹配 stripchat.com 或任意 mirror 域名下的 /<username> 路径
+			// stripchat.com  mirror  /<username>
 			const parts = url.pathname.split("/").filter(Boolean);
 			if (parts.length > 0) return parts[0];
 		} catch {
-			// 不是 URL，直接当用户名
+			// URL，
 		}
 		return trimmed;
 	}
 
 	/**
-	 * 提交表单：验证输入、调用 addStreamer、反馈结果。
+	 * ：、 addStreamer、。
 	 * Submit the form: validate input, call addStreamer, provide feedback.
 	 */
 	async function submit() {

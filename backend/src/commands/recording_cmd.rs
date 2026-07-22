@@ -1,6 +1,6 @@
-//! 录制文件管理命令 / Recording File Management Commands
+//! Recording File Management Commands
 //!
-//! 提供录制文件列表查询、合并状态查询、文件删除等功能。
+//! 、、。
 //! Provides recording file list queries, merge status queries, and file deletion.
 //! These functions are called directly by the HTTP server handlers in server_mod/server.rs.
 
@@ -11,7 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// 录制文件元数据（序列化后返回给前端）/ Recording file metadata (serialized and returned to the frontend)
+/// （）/ Recording file metadata (serialized and returned to the frontend)
 #[derive(serde::Serialize)]
 pub struct RecordingFile {
     pub name: String,
@@ -29,7 +29,7 @@ pub struct RecordingFile {
     pub module_outputs: Option<std::collections::HashMap<String, String>>,
 }
 
-/// 录制文件列表查询的核心实现（同步，在阻塞线程中调用）。
+/// （，）。
 /// Core implementation of recording file list query (synchronous, called in a blocking thread).
 pub fn list_recordings_inner(
     state: &Arc<AppState>,
@@ -169,7 +169,7 @@ fn collect_from_meta(
     Ok(())
 }
 
-/// 删除录制文件的核心实现（同步，在阻塞线程中调用）。
+/// （，）。
 /// Core implementation of recording file deletion (synchronous, called in a blocking thread).
 pub fn delete_recording_inner(
     path: &str,
@@ -241,7 +241,7 @@ pub fn delete_recording_inner(
     Ok(())
 }
 
-/// 从文件名 stem（格式：`{name}_{YYYYMMDD}_{HHmmss}`）中解析录制开始时间。
+/// stem（：`{name}_{YYYYMMDD}_{HHmmss}`）。
 /// Parse the recording start time from a filename stem (format: `{name}_{YYYYMMDD}_{HHmmss}`).
 pub fn parse_timestamp_from_stem_pub(stem: &str) -> Option<String> {
     use chrono::TimeZone;

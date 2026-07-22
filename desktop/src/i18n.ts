@@ -1,7 +1,7 @@
 /**
- * i18n 初始化模块（桌面版）/ i18n Initialization Module (Desktop)
+ * i18n （）/ i18n Initialization Module (Desktop)
  *
- * 与服务器版的区别：通过 Tauri invoke 而非 fetch 加载 locale 数据。
+ * ： Tauri invoke  fetch  locale 。
  * Difference from server version: loads locale data via Tauri invoke instead of fetch.
  */
 
@@ -14,14 +14,14 @@ export type MessageSchema = typeof zhCN;
 
 const savedLocale = "zh-CN";
 
-/** 可用语言条目 / Available locale entry */
+/*Available locale entry */
 export interface LocaleEntry {
 	code: string;
 	name: string;
 }
 
 /**
- * 获取服务器支持的语言列表（通过 Tauri invoke）。
+ * （ Tauri invoke）。
  * Fetch available locales via Tauri invoke.
  */
 export async function fetchAvailableLocales(): Promise<LocaleEntry[]> {
@@ -47,7 +47,7 @@ export interface LoadLocaleResult {
 }
 
 /**
- * 从后端加载指定语言的完整 locale 数据（通过 Tauri invoke）。
+ * locale （ Tauri invoke）。
  * Load the full locale data for the given locale code via Tauri invoke.
  */
 export async function loadLocaleFromServer(

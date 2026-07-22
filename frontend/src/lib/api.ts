@@ -1,31 +1,31 @@
 /**
- * API 通信层 / API Communication Layer
+ * API Communication Layer
  *
- * 基于 HTTP REST + SSE 实时事件的 Web 通信层。
+ * HTTP REST + SSE  Web 。
  * HTTP REST + SSE real-time event communication layer.
  */
 
 type EventCallback = (payload: unknown) => void;
 
-/** SSE 事件监听器映射表：事件名 -> 回调集合 / SSE event listener map: event name -> set of callbacks */
+/*SSE event listener map: event name -> set of callbacks */
 const sseListeners = new Map<string, Set<EventCallback>>();
-/** SSE 是否已连接 / Whether SSE is connected */
+/*Whether SSE is connected */
 let sseConnected = false;
-/** SSE 连接就绪时的 resolve 函数 / Resolve function called when SSE connection is ready */
+/*Resolve function called when SSE connection is ready */
 let sseReadyResolve: (() => void) | null = null;
 
-/** SSE 连接就绪的 Promise / Promise that resolves when SSE connection is ready */
+/*Promise that resolves when SSE connection is ready */
 const sseReady: Promise<void> = new Promise((resolve) => {
 	sseReadyResolve = resolve;
 });
 
-/** SSE 重连事件的回调集合 / Callback set for SSE reconnect events */
+/*Callback set for SSE reconnect events */
 let sseReconnectCallbacks: Set<() => void> = new Set();
-/** SSE 断开连接事件的回调集合 / Callback set for SSE disconnect events */
+/*Callback set for SSE disconnect events */
 let sseDisconnectCallbacks: Set<() => void> = new Set();
 
 /**
- * 注册 SSE 重连回调，返回取消注册函数。
+ * SSE ，。
  * Register an SSE reconnect callback, returns an unregister function.
  */
 export function onSseReconnect(cb: () => void): () => void {
@@ -34,7 +34,7 @@ export function onSseReconnect(cb: () => void): () => void {
 }
 
 /**
- * 注册 SSE 断开连接回调，返回取消注册函数。
+ * SSE ，。
  * Register an SSE disconnect callback, returns an unregister function.
  */
 export function onSseDisconnect(cb: () => void): () => void {
@@ -43,8 +43,8 @@ export function onSseDisconnect(cb: () => void): () => void {
 }
 
 /**
- * 确保 SSE 连接已建立。
- * 连接断开后每 3 秒自动重连，并触发相应回调。
+ * SSE 。
+ * 3 ，。
  *
  * Ensures the SSE connection is established.
  * Auto-reconnects every 3 seconds on disconnect and triggers corresponding callbacks.
@@ -91,12 +91,12 @@ function ensureSse() {
 }
 
 /**
- * 调用后端命令（HTTP REST）。
+ * （HTTP REST）。
  * Invoke a backend command via HTTP REST.
  *
- * @param command - 命令名称 / Command name
- * @param args - 命令参数 / Command arguments
- * @returns 命令返回值 / Command return value
+ * Command name
+ * Command arguments
+ * Command return value
  */
 export async function call<T = unknown>(
 	command: string,
@@ -106,12 +106,12 @@ export async function call<T = unknown>(
 }
 
 /**
- * 订阅后端事件（SSE）。
+ * （SSE）。
  * Subscribe to a backend event via SSE.
  *
- * @param event - 事件名称 / Event name
- * @param cb - 事件回调函数 / Event callback function
- * @returns 取消订阅函数 / Unsubscribe function
+ * Event name
+ * Event callback function
+ * Unsubscribe function
  */
 export async function on(
 	event: string,
@@ -125,7 +125,7 @@ export async function on(
 }
 
 /**
- * HTTP 命令路由表：将命令名映射到对应的 HTTP 方法、URL 和请求体构造函数。
+ * HTTP ： HTTP 、URL 。
  * HTTP command routing table: maps command names to HTTP method, URL, and body builder.
  */
 const COMMAND_MAP: Record<
@@ -236,13 +236,13 @@ const COMMAND_MAP: Record<
 };
 
 /**
- * 通过 HTTP 执行命令。
+ * HTTP 。
  * Execute a command via HTTP.
  *
- * @param command - 命令名称，必须在 COMMAND_MAP 中定义 / Command name, must be defined in COMMAND_MAP
- * @param args - 命令参数 / Command arguments
- * @returns 解析后的响应数据 / Parsed response data
- * @throws 命令未知或 HTTP 请求失败时抛出错误 / Throws on unknown command or HTTP failure
+ * Command name, must be defined in COMMAND_MAP
+ * Command arguments
+ * Parsed response data
+ * Throws on unknown command or HTTP failure
  */
 async function httpCall<T>(
 	command: string,

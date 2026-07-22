@@ -1,8 +1,8 @@
-//! 文件系统监控 / File System Watchers
+//! File System Watchers
 //!
-//! 提供两个文件监控器：
-//! 1. 录制输出目录监控：检测文件变化并向前端发送 `recordings-dir-changed` 事件（防抖 400ms）
-//! 2. 模块目录监控：检测模块可执行文件的增删并发送 `modules-changed` 事件（防抖 500ms）
+//! ：
+//! 1. ： `recordings-dir-changed` （ 400ms）
+//! 2. ： `modules-changed` （ 500ms）
 //!
 //! Provides two file system watchers:
 //! 1. Recording output directory watcher: detects file changes and emits `recordings-dir-changed` events (400ms debounce)
@@ -16,7 +16,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// 判断路径是否为"噪声"路径（.ts/.tmp/.part/.partial 文件），这些文件变化频繁，不需要触发刷新。
+/// ""（.ts/.tmp/.part/.partial ），，。
 /// Check if a path is a "noisy" path (.ts/.tmp/.part/.partial files) that change frequently
 /// and should not trigger a refresh.
 fn is_noisy_path(path: &Path) -> bool {
@@ -28,8 +28,8 @@ fn is_noisy_path(path: &Path) -> bool {
     )
 }
 
-/// 判断文件系统事件是否应该触发前端刷新。
-/// 过滤掉纯访问事件和噪声路径的变化。
+/// 。
+/// 。
 ///
 /// Determine if a file system event should trigger a frontend refresh.
 /// Filters out pure access events and changes to noisy paths.
@@ -40,8 +40,8 @@ fn should_emit(event: &Event) -> bool {
     event.paths.iter().any(|p| !is_noisy_path(p))
 }
 
-/// 启动录制输出目录监控器（在独立线程中运行）。
-/// 当输出目录设置变更时自动切换监控目标。
+/// （）。
+/// 。
 ///
 /// Start the recording output directory watcher (runs in a dedicated thread).
 /// Automatically switches the watch target when the output directory setting changes.
@@ -57,7 +57,7 @@ pub fn start_recordings_dir_watcher(state: Arc<AppState>, emitter: Arc<dyn Emitt
 
         loop {
             let current_dir = PathBuf::from(state.get_settings().output_dir);
-            // 若输出目录发生变化，重新创建监控器 / If output dir changed, recreate the watcher
+            // If output dir changed, recreate the watcher
             if current_dir != watched_dir {
                 if let Err(e) = std::fs::create_dir_all(&current_dir) {
                     tracing::error!("Failed to create watch dir {:?}: {}", current_dir, e);
@@ -89,7 +89,7 @@ pub fn start_recordings_dir_watcher(state: Arc<AppState>, emitter: Arc<dyn Emitt
                     if watched_dir.as_os_str().is_empty() || !should_emit(&event) {
                         continue;
                     }
-                    // 防抖：400ms 内的多次事件只触发一次 / Debounce: only emit once within 400ms
+                    // Debounce: only emit once within 400ms
                     if last_emit.elapsed() < Duration::from_millis(400) {
                         continue;
                     }
@@ -114,9 +114,9 @@ pub fn start_recordings_dir_watcher(state: Arc<AppState>, emitter: Arc<dyn Emitt
     });
 }
 
-/// 启动 locale 目录监控器（在独立线程中运行）。
-/// 监控 `locale/app/` 目录中 JSON 文件的增删，发送 `locale-files-changed` 事件。
-/// 防抖 800ms，避免写入多个文件时重复触发。
+/// locale （）。
+/// `locale/app/`  JSON ， `locale-files-changed` 。
+/// 800ms，。
 ///
 /// Start the locale directory watcher (runs in a dedicated thread).
 /// Watches for JSON file additions/removals in `locale/app/` and emits `locale-files-changed` events.
@@ -133,7 +133,7 @@ pub fn start_locale_dir_watcher(emitter: Arc<dyn Emitter>) {
 
         let mut watcher = match RecommendedWatcher::new(tx, Config::default()) {
             Ok(mut w) => {
-                // 只监控 locale/app/ 目录本身，不递归（只关心顶层 .json 文件的增删）
+                // locale/app/ ，（ .json ）
                 // Watch only the locale/app/ dir itself, non-recursive (only top-level .json changes matter)
                 if let Err(e) = w.watch(&locale_dir, RecursiveMode::NonRecursive) {
                     tracing::error!("Failed to watch locale dir {:?}: {}", locale_dir, e);
@@ -152,7 +152,7 @@ pub fn start_locale_dir_watcher(emitter: Arc<dyn Emitter>) {
         loop {
             match rx.recv_timeout(Duration::from_secs(5)) {
                 Ok(Ok(event)) => {
-                    // 只关心 .json 文件的创建和删除事件
+                    // .json
                     // Only care about Create/Remove events for .json files
                     if matches!(event.kind, EventKind::Access(_)) {
                         continue;
@@ -163,7 +163,7 @@ pub fn start_locale_dir_watcher(emitter: Arc<dyn Emitter>) {
                     if !has_json {
                         continue;
                     }
-                    // 防抖：800ms 内的多次事件只触发一次 / Debounce: only emit once within 800ms
+                    // Debounce: only emit once within 800ms
                     if last_emit.elapsed() < Duration::from_millis(800) {
                         continue;
                     }
@@ -178,8 +178,8 @@ pub fn start_locale_dir_watcher(emitter: Arc<dyn Emitter>) {
     });
 }
 
-/// 启动模块目录监控器（在独立线程中运行）。
-/// 检测 modules/ 目录中可执行文件的增删，发送 `modules-changed` 事件。
+/// （）。
+/// modules/ ， `modules-changed` 。
 ///
 /// Start the modules directory watcher (runs in a dedicated thread).
 /// Detects additions/removals of executables in the modules/ directory and emits `modules-changed` events.
@@ -195,7 +195,7 @@ pub fn start_modules_dir_watcher(emitter: Arc<dyn Emitter>) {
 
         let mut watcher = match RecommendedWatcher::new(tx, Config::default()) {
             Ok(mut w) => {
-                // 只监控模块目录本身，不递归 / Watch only the modules dir itself, non-recursive
+                // Watch only the modules dir itself, non-recursive
                 if let Err(e) = w.watch(&modules_dir, RecursiveMode::NonRecursive) {
                     tracing::error!("Failed to watch modules dir: {}", e);
                 } else {
@@ -216,7 +216,7 @@ pub fn start_modules_dir_watcher(emitter: Arc<dyn Emitter>) {
                     if matches!(event.kind, EventKind::Access(_)) {
                         continue;
                     }
-                    // 防抖：500ms 内的多次事件只触发一次 / Debounce: only emit once within 500ms
+                    // Debounce: only emit once within 500ms
                     if last_emit.elapsed() < Duration::from_millis(500) {
                         continue;
                     }

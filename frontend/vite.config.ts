@@ -14,7 +14,7 @@ export default defineConfig({
   },
 
   build: {
-    // 输出到 build_tmp/frontend/dist/，backend 的 RustEmbed 从该目录读取
+    // build_tmp/frontend/dist/，backend  RustEmbed
     // Output to build_tmp/frontend/dist/; backend RustEmbed reads from this directory
     outDir: "../build_tmp/frontend/dist",
     emptyOutDir: true,

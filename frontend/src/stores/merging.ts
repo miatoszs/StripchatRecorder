@@ -1,8 +1,8 @@
 /**
- * 视频合并状态管理 Store / Video Merge State Management Store
+ * Video Merge State Management Store
  *
- * 将合并状态提升为全局 Pinia store，使各页面（如主播列表页）
- * 在删除主播时能够清理对应的合并队列状态。
+ * Pinia store，（）
+ * 。
  *
  * Elevates merge state to a global Pinia store so that other views
  * (e.g. the streamer list) can clean up merge queue state when a streamer is removed.
@@ -13,18 +13,18 @@ import { ref, computed } from "vue";
 import { call } from "@/lib/api";
 
 export const useMergingStore = defineStore("merging", () => {
-	/** 正在合并的会话目录 -> 目标文件路径 映射 / Map of merging session dir -> target file path */
+	/*Map of merging session dir -> target file path */
 	const mergingDirs = ref<Map<string, string>>(new Map());
 
-	/** 各会话目录的合并进度（已写入字节 / 总字节）/ Merge progress per session dir (written / total bytes) */
+	/*total bytes) */
 	const mergeProgress = ref<
 		Record<string, { out_bytes: number; total_bytes: number }>
 	>({});
 
-	/** 等待合并（排队中）的会话目录 -> 目标文件路径 映射 / Map of waiting-to-merge session dir -> target file path */
+	/*Map of waiting-to-merge session dir -> target file path */
 	const waitingMergeDirs = ref<Map<string, string>>(new Map());
 
-	/** 正在合并的目标文件路径集合（路径统一为正斜杠）/ Set of target paths currently merging (normalized to forward slashes) */
+	/** （）/ Set of target paths currently merging (normalized to forward slashes) */
 	const mergingTargetPaths = computed(
 		() =>
 			new Set(
@@ -32,7 +32,7 @@ export const useMergingStore = defineStore("merging", () => {
 			),
 	);
 
-	/** 等待合并的目标文件路径集合 / Set of target paths waiting to merge */
+	/*Set of target paths waiting to merge */
 	const waitingMergeTargetPaths = computed(
 		() =>
 			new Set(
@@ -41,7 +41,7 @@ export const useMergingStore = defineStore("merging", () => {
 	);
 
 	/**
-	 * 判断指定路径的文件是否正在合并（包括等待中）。
+	 * （）。
 	 * Check if the file at the given path is currently merging (including waiting).
 	 */
 	function isMerging(path: string): boolean {
@@ -53,7 +53,7 @@ export const useMergingStore = defineStore("merging", () => {
 	}
 
 	/**
-	 * 判断指定路径的文件是否在等待合并队列中。
+	 * 。
 	 * Check if the file at the given path is in the waiting-to-merge queue.
 	 */
 	function isWaitingMerge(path: string): boolean {
@@ -61,7 +61,7 @@ export const useMergingStore = defineStore("merging", () => {
 	}
 
 	/**
-	 * 获取指定目标文件的合并进度百分比（0-99），未找到返回 null。
+	 * （0-99）， null。
 	 * Get the merge progress percentage (0-99) for a target file, returns null if not found.
 	 */
 	function getMergeProgress(targetPath: string): number | null {
@@ -80,7 +80,7 @@ export const useMergingStore = defineStore("merging", () => {
 	}
 
 	/**
-	 * 将会话目录标记为正在合并，并从等待队列中移除。
+	 * ，。
 	 * Mark a session directory as actively merging and remove it from the waiting queue.
 	 */
 	function addMerging(sessionDir: string, mergedPath: string) {
@@ -92,7 +92,7 @@ export const useMergingStore = defineStore("merging", () => {
 	}
 
 	/**
-	 * 将会话目录加入等待合并队列。
+	 * 。
 	 * Add a session directory to the waiting-to-merge queue.
 	 */
 	function addWaitingMerge(sessionDir: string, mergedPath: string) {
@@ -103,7 +103,7 @@ export const useMergingStore = defineStore("merging", () => {
 	}
 
 	/**
-	 * 清除指定会话目录的合并状态（合并完成或失败后调用）。
+	 * （）。
 	 * Clear the merge state for a specific session directory (called after merge completes or fails).
 	 */
 	function clearMergingForSessionDir(sessionDir: string) {
@@ -117,10 +117,10 @@ export const useMergingStore = defineStore("merging", () => {
 	}
 
 	/**
-	 * 清除指定主播的所有合并状态（主播被移除时调用）。
+	 * （）。
 	 * Clear all merge states for a specific streamer (called when a streamer is removed).
 	 *
-	 * @param username - 主播用户名 / Streamer username
+	 * Streamer username
 	 */
 	function clearMergingForUsername(username: string) {
 		const next = new Map(mergingDirs.value);
@@ -141,7 +141,7 @@ export const useMergingStore = defineStore("merging", () => {
 	}
 
 	/**
-	 * 从后端恢复合并状态（页面刷新或重连后调用）。
+	 * （）。
 	 * Restore merge state from the backend (called after page refresh or reconnect).
 	 */
 	async function initFromBackend() {

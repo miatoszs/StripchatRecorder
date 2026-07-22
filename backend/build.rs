@@ -1,7 +1,7 @@
 use std::fs;
 
 fn main() {
-    // 从 frontend/package.json 读取版本号，与 Cargo.toml 中的版本对比，不一致时编译报错。
+    // frontend/package.json ， Cargo.toml ，。
     // Read version from frontend/package.json and compare with Cargo.toml; fail if they differ.
     let pkg_json = fs::read_to_string("../frontend/package.json")
         .expect("build.rs: failed to read ../frontend/package.json");
@@ -25,7 +25,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed=../frontend/package.json");
 
-    // 确保 build_tmp/frontend/dist/ 目录存在，避免 RustEmbed 在目录不存在时编译报错
+    // build_tmp/frontend/dist/ ， RustEmbed
     // Ensure build_tmp/frontend/dist/ exists so RustEmbed doesn't fail when the frontend hasn't been built yet
     let _ = fs::create_dir_all("../build_tmp/frontend/dist");
 }

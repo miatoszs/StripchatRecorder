@@ -1,8 +1,8 @@
 /**
- * 应用设置状态管理 Store / Application Settings State Management Store
+ * Application Settings State Management Store
  *
- * 管理录制器的全局配置，包括输出目录、轮询间隔、代理设置、并发数和合并格式。
- * 支持多客户端实时同步：当其他客户端修改设置时，通过事件自动更新本地状态。
+ * ，、、、。
+ * ：，。
  *
  * Manages global recorder configuration including output directory, poll interval,
  * proxy settings, concurrency, and merge format.
@@ -14,48 +14,48 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { call, on } from "@/lib/api";
 
-/** 应用设置数据结构 / Application settings data structure */
+/*Application settings data structure */
 export interface Settings {
-	/** 录制文件输出目录 / Recording output directory */
+	/*Recording output directory */
 	output_dir: string;
-	/** 主播状态轮询间隔（秒）/ Streamer status poll interval (seconds) */
+	/** （）/ Streamer status poll interval (seconds) */
 	poll_interval_secs: number;
-	/** 是否默认开启自动录制 / Whether auto-record is enabled by default */
+	/*Whether auto-record is enabled by default */
 	auto_record: boolean;
-	/** Stripchat API 代理地址 / Stripchat API proxy URL */
+	/*Stripchat API proxy URL */
 	api_proxy_url: string | null;
-	/** CDN 缩略图代理地址 / CDN thumbnail proxy URL */
+	/*CDN thumbnail proxy URL */
 	cdn_proxy_url: string | null;
-	/** Stripchat 镜像站地址 / Stripchat mirror site URL */
+	/*Stripchat mirror site URL */
 	sc_mirror_url: string | null;
-	/** 最大并发录制数（0 = 不限制）/ Max concurrent recordings (0 = unlimited) */
+	/** （0 = ）/ Max concurrent recordings (0 = unlimited) */
 	max_concurrent: number;
-	/** 录制片段合并格式（"mp4" 或 "mkv"）/ Recording segment merge format ("mp4" or "mkv") */
+	/** （"mp4"  "mkv"）/ Recording segment merge format ("mp4" or "mkv") */
 	merge_format: string;
-	/** 后处理 tmp 目录最大占用（GB，0 = 不限制）/ Max tmp dir size in GB (0 = unlimited) */
+	/**  tmp （GB，0 = ）/ Max tmp dir size in GB (0 = unlimited) */
 	max_tmp_dir_gb: number;
-	/** 界面语言 / UI language */
+	/*UI language */
 	language: string;
-	/** Mouflon Keys 同步 URL / Mouflon Keys sync URL */
+	/*Mouflon Keys sync URL */
 	mouflon_sync_url: string | null;
-	/** Mouflon Keys 同步鉴权 Token / Mouflon Keys sync auth token */
+	/*Mouflon Keys sync auth token */
 	mouflon_sync_token: string | null;
-	/** 首次启动向导是否已完成 / Whether the first-launch setup wizard has been completed */
+	/*Whether the first-launch setup wizard has been completed */
 	setup_done: boolean;
 }
 
-/** Mouflon 密钥存储结构（含时间戳）/ Mouflon key store (with timestamps) */
+/** Mouflon （）/ Mouflon key store (with timestamps) */
 export interface MouflonKeysStore {
-	/** pkey -> pdkey 密钥对 / pkey -> pdkey key pairs */
+	/*pkey -> pdkey key pairs */
 	keys: Record<string, string>;
-	/** 最近一次自动同步时间（RFC 3339）/ Timestamp of last auto-sync (RFC 3339) */
+	/** （RFC 3339）/ Timestamp of last auto-sync (RFC 3339) */
 	auto_synced_at: string | null;
-	/** 最近一次手动操作时间（RFC 3339）/ Timestamp of last manual key change (RFC 3339) */
+	/** （RFC 3339）/ Timestamp of last manual key change (RFC 3339) */
 	manual_updated_at: string | null;
 }
 
 export const useSettingsStore = defineStore("settings", () => {
-	/** 当前设置值 / Current settings values */
+	/*Current settings values */
 	const settings = ref<Settings>({
 		output_dir: "",
 		poll_interval_secs: 30,
@@ -71,17 +71,17 @@ export const useSettingsStore = defineStore("settings", () => {
 		mouflon_sync_token: null,
 		setup_done: false,
 	});
-	/** 是否正在加载 / Whether loading */
+	/*Whether loading */
 	const loading = ref(false);
-	/** 保存成功后短暂显示的状态标志 / Flag briefly set to true after successful save */
+	/*Flag briefly set to true after successful save */
 	const saved = ref(false);
-	/** 是否正在本地保存（用于过滤自身触发的 settings-updated 事件）/ Whether saving locally (to filter self-triggered settings-updated events) */
+	/** （ settings-updated ）/ Whether saving locally (to filter self-triggered settings-updated events) */
 	const isSavingLocally = ref(false);
-	/** 事件监听器是否已初始化（防止重复注册）/ Whether event listeners are initialized (prevents duplicate registration) */
+	/** （）/ Whether event listeners are initialized (prevents duplicate registration) */
 	let listenersReady = false;
 
 	/**
-	 * 从后端获取当前设置。
+	 * 。
 	 * Fetch current settings from the backend.
 	 */
 	async function fetchSettings() {
@@ -94,10 +94,10 @@ export const useSettingsStore = defineStore("settings", () => {
 	}
 
 	/**
-	 * 保存设置到后端，并在 2 秒内显示保存成功状态。
+	 * ， 2 。
 	 * Save settings to the backend and briefly show a saved indicator for 2 seconds.
 	 *
-	 * @param s - 要保存的设置对象 / Settings object to save
+	 * Settings object to save
 	 */
 	async function saveSettings(s: Settings) {
 		isSavingLocally.value = true;
@@ -107,7 +107,7 @@ export const useSettingsStore = defineStore("settings", () => {
 			saved.value = true;
 			setTimeout(() => (saved.value = false), 2000);
 		} finally {
-			// 延迟 500ms 后清除本地保存标志，确保事件过滤窗口足够
+			// 500ms ，
 			// Clear local saving flag after 500ms to ensure event filter window is sufficient
 			setTimeout(() => {
 				isSavingLocally.value = false;
@@ -116,14 +116,14 @@ export const useSettingsStore = defineStore("settings", () => {
 	}
 
 	/**
-	 * 初始化设置更新事件监听器（只执行一次）。
+	 * （）。
 	 * Initialize settings update event listener (executed only once).
 	 */
 	async function initListeners() {
 		if (listenersReady) return;
 		listenersReady = true;
 		await on("settings-updated", (payload) => {
-			// 本地保存时忽略自身触发的事件 / Ignore self-triggered events during local save
+			// Ignore self-triggered events during local save
 			if (isSavingLocally.value) return;
 			settings.value = payload as Settings;
 		});

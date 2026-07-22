@@ -48,17 +48,17 @@
 	const moduleLocaleStore = useModuleLocaleStore();
 	const localesStore = useLocalesStore();
 
-	/** 可用语言列表（从共享 store 读取，由 App.vue 统一维护）
+	/** （ store ， App.vue ）
 	 * Available locales (from shared store, maintained by App.vue) */
-	// 直接使用 store 的 ref，保持响应式；不能赋给普通变量（会丢失响应式）
+	// store  ref，；（）
 	// Use the store's ref directly to keep reactivity; assigning to a plain variable breaks it
 
 	async function setLocale(lang: string) {
-		// 先加载消息，再切换 locale，避免 vue-i18n 在消息就绪前以 fallback 语言渲染
+		// ， locale， vue-i18n  fallback
 		// Load messages first, then switch locale to avoid vue-i18n rendering with fallback
 		const { modules: moduleLocales, warning } = await loadLocaleFromServer(lang);
 		locale.value = lang;
-		// 将语言写入 settings 持久化 / Persist language to settings
+		// Persist language to settings
 		form.language = lang;
 		await store.saveSettings({ ...form, language: lang });
 		toast(t("settings.saved"), "success");
@@ -68,7 +68,7 @@
 		}
 	}
 
-	/** 表单响应式数据（与 store.settings 保持同步）/ Reactive form data (synced with store.settings) */
+	/** （ store.settings ）/ Reactive form data (synced with store.settings) */
 	const form = reactive<Settings>({
 		output_dir: "",
 		poll_interval_secs: 30,
@@ -85,7 +85,7 @@
 		setup_done: true,
 	});
 
-	// 保存各代理字段的原始值，用于检测是否有实际变更
+	// ，
 	// Store original values for proxy fields to detect actual changes
 	const originalOutputDir = ref("");
 	const originalApiProxy = ref<string | null>(null);
@@ -93,7 +93,7 @@
 	const originalScMirror = ref<string | null>(null);
 	const originalMouflonSyncUrl = ref<string | null>(null);
 	const originalMouflonSyncToken = ref<string | null>(null);
-	/** 是否已完成初始化（防止初始化时触发自动保存）/ Whether initialization is complete (prevents auto-save during init) */
+	/** （）/ Whether initialization is complete (prevents auto-save during init) */
 	let initialized = false;
 
 	const unlisteners: (() => void)[] = [];
@@ -112,7 +112,7 @@
 		initialized = true;
 		await loadKeys();
 
-		// 监听其他客户端的 Mouflon 密钥更新 / Listen for Mouflon key updates from other clients
+		// Listen for Mouflon key updates from other clients
 		unlisteners.push(
 			await on("mouflon-keys-updated", (payload) => {
 				const store = payload as MouflonKeysStore;
@@ -126,7 +126,7 @@
 		unlisteners.forEach((fn) => fn());
 	});
 
-	// 监听不需要确认的设置字段，变更时自动保存
+	// ，
 	// Watch settings fields that don't require confirmation, auto-save on change
 	watch(
 		() => ({
@@ -144,7 +144,7 @@
 		{ deep: true },
 	);
 
-	// 监听 store.settings 变化（来自其他客户端），同步到表单
+	// store.settings （），
 	// Watch store.settings changes (from other clients) and sync to form
 	watch(
 		() => store.settings,
@@ -167,10 +167,10 @@
 	);
 
 	/**
-	 * 保存代理相关字段（仅在值有实际变更时保存）。
+	 * （）。
 	 * Save a proxy-related field (only if the value actually changed).
 	 *
-	 * @param field - 要保存的设置字段名 / Settings field name to save
+	 * Settings field name to save
 	 */
 	async function saveProxy(
 		field: "api_proxy_url" | "cdn_proxy_url" | "sc_mirror_url" | "mouflon_sync_url" | "mouflon_sync_token",
@@ -191,7 +191,7 @@
 	}
 
 	/**
-	 * 保存输出目录（需要用户确认，因为会影响正在进行的录制）。
+	 * （，）。
 	 * Save the output directory (requires user confirmation as it affects ongoing recordings).
 	 */
 	async function saveOutputDir() {
@@ -207,24 +207,24 @@
 			originalOutputDir.value = form.output_dir;
 			toast(t("settings.outputDir.changeDone"), "info");
 		} else {
-			// 用户取消时恢复原始值 / Restore original value if user cancels
+			// Restore original value if user cancels
 			form.output_dir = originalOutputDir.value;
 		}
 	}
 
-	/** Mouflon 密钥存储（含时间戳）/ Mouflon key store (with timestamps) */
+	/** Mouflon （）/ Mouflon key store (with timestamps) */
 	const mouflonStore = ref<MouflonKeysStore>({ keys: {}, auto_synced_at: null, manual_updated_at: null });
-	/** 新密钥表单：pkey 输入值 / New key form: pkey input value */
+	/*New key form: pkey input value */
 	const newPkey = ref("");
-	/** 新密钥表单：pdkey 输入值 / New key form: pdkey input value */
+	/*New key form: pdkey input value */
 	const newPdkey = ref("");
-	/** 密钥添加错误信息 / Key addition error message */
+	/*Key addition error message */
 	const keyError = ref("");
-	/** 是否正在手动同步 / Whether manual sync is in progress */
+	/*Whether manual sync is in progress */
 	const syncing = ref(false);
 
 	/**
-	 * 从后端加载 Mouflon 密钥列表。
+	 * Mouflon 。
 	 * Load the Mouflon key list from the backend.
 	 */
 	async function loadKeys() {
@@ -232,7 +232,7 @@
 	}
 
 	/**
-	 * 添加新的 Mouflon 密钥对。
+	 * Mouflon 。
 	 * Add a new Mouflon key pair.
 	 */
 	async function addKey() {
@@ -254,10 +254,10 @@
 	}
 
 	/**
-	 * 删除指定的 Mouflon 密钥。
+	 * Mouflon 。
 	 * Remove a specific Mouflon key.
 	 *
-	 * @param pkey - 要删除的密钥标识符 / Key identifier to remove
+	 * Key identifier to remove
 	 */
 	async function removeKey(pkey: string) {
 		await call("remove_mouflon_key", { pkey });
@@ -265,7 +265,7 @@
 	}
 
 	/**
-	 * 手动触发一次从同步 URL 拉取密钥。
+	 * URL 。
 	 * Manually trigger a key sync from the configured URL.
 	 */
 	async function syncKeys() {
@@ -281,7 +281,7 @@
 		}
 	}
 
-	/** 格式化 RFC 3339 时间戳为本地时间字符串 / Format RFC 3339 timestamp to local time string */
+	/*Format RFC 3339 timestamp to local time string */
 	function formatTs(ts: string | null): string {
 		if (!ts) return t("settings.mouflonNever");
 		return new Date(ts).toLocaleString();

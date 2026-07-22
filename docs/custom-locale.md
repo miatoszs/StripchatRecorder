@@ -1,22 +1,22 @@
-# 自定义语言
+# Custom Locale
 
 [简体中文](custom-locale.md) | [English](custom-locale.en.md)
 
-本文档说明如何在 StripchatRecorder 中自定义界面翻译或添加新语言。
+This document explains how to customize UI translations or add new languages in StripchatRecorder.
 
-翻译现在从**磁盘上的 JSON 文件**读取，不再编译进程序。程序首次运行时会自动创建默认语言文件，可以随意编辑——更新程序不会覆盖你的修改。
+Translations are now loaded from **JSON files on disk** rather than being compiled into the binary. The program creates default locale files on first run, which you can edit freely — your changes are never overwritten by updates.
 
 ---
 
-## 目录结构
+## Directory Structure
 
 ```
 <exe_dir>/
 └── locale/
-    ├── app/                        # 主程序翻译
-    │   ├── zh-CN.json              # 简体中文（默认）
-    │   └── en-US.json              # 英文
-    └── modules/                    # 模块翻译
+    ├── app/                        # Main application translations
+    │   ├── zh-CN.json              # Simplified Chinese (default)
+    │   └── en-US.json              # English
+    └── modules/                    # Module translations
         ├── filter_short/
         │   ├── zh-CN.json
         │   └── en-US.json
@@ -31,25 +31,25 @@
             └── en-US.json
 ```
 
-> **注意：** 文件在首次运行时自动创建。若文件已存在则**永远不会被覆盖**，重启或更新程序后自定义内容均会保留。
+> **Note:** Files are created automatically on first run. If a file already exists it is **never overwritten**, so your customizations are preserved across restarts and updates.
 
 ---
 
-## 修改现有翻译
+## Modifying Existing Translations
 
-直接编辑 `locale/app/` 或 `locale/modules/<module_id>/` 下对应语言的 JSON 文件即可。
+Simply edit the JSON file for the desired language under `locale/app/` or `locale/modules/<module_id>/`.
 
-前端在启动和每次切换语言时都会请求 `/api/locale/{code}`，因此修改后**刷新页面**立即生效，无需重新编译。
+The frontend fetches `/api/locale/{code}` on startup and on every language switch, so your changes take effect immediately after **reloading the page** — no rebuild required.
 
 ---
 
-## 添加新语言
+## Adding a New Language
 
-### 1. 创建语言文件
+### 1. Create the locale file
 
-在 `locale/app/` 下以 BCP 47 语言标签为文件名新建 JSON 文件，例如 `ja-JP.json`。
+Create a new file under `locale/app/` using a BCP 47 language tag as the filename, e.g. `ja-JP.json`.
 
-以 `zh-CN.json` 为模板，翻译所有字符串值（保持所有 key 和 `{变量}` 占位符不变），并设置 `languageName` 字段为该语言的自身显示名称：
+Copy `en-US.json` as a template and translate all string values (keep all keys and `{variable}` placeholders unchanged). Set the `languageName` field to the language's own native name:
 
 ```json
 {
@@ -62,52 +62,52 @@
 }
 ```
 
-**完成，无需修改任何代码。** 程序重启后，`/api/locales` 会自动包含新语言，设置页和初始配置向导的语言列表也会自动更新。
+**That's it — no code changes required.** After restarting the program, `/api/locales` automatically includes the new language and both the Settings page and the setup wizard will display it in the language list.
 
 ---
 
-## 模块翻译
+## Module Translations
 
-每个模块在 `locale/modules/<module_id>/` 下有独立文件夹。在其中放置 `{语言代码}.json` 文件，格式如下：
+Each module has its own folder under `locale/modules/<module_id>/`. Place a `{locale_code}.json` file there with the following structure:
 
 ```json
 {
-  "name": "我的模块",
-  "description": "模块功能描述",
+  "name": "My Module",
+  "description": "Module description",
   "params": {
-    "param_key": { "label": "参数标签" }
+    "param_key": { "label": "Param label" }
   }
 }
 ```
 
-所有字段均为可选——未填写的字段会回退到模块 `--describe` JSON 中的对应值。
+All fields are optional — any omitted field falls back to the module's own `--describe` JSON value.
 
-> **优先级：** 服务器端 locale JSON > `--describe` 中的 i18n 字段 > 原始默认值
+> **Priority:** Server-side locale JSON overrides `--describe` i18n → `--describe` i18n overrides the original default value.
 
-对于第三方模块（不在内置列表中），只需在 `locale/modules/` 下新建以模块 `id` 命名的文件夹并放入 JSON 文件，系统会自动发现。
+For third-party modules (not in the built-in list), simply create a folder with the module's `id` under `locale/modules/` and add the JSON files — the system discovers them automatically.
 
 ---
 
-## 翻译键参考
+## Translation Key Reference
 
-| 顶层 key         | 说明                          |
-| ---------------- | ----------------------------- |
-| `nav`            | 侧边栏导航标签                |
-| `common`         | 通用按钮文字（确认、取消…）  |
-| `notify`         | 系统通知和对话框              |
-| `home`           | 主播列表页                    |
-| `streamerCard`   | 主播卡片组件                  |
-| `addStreamer`    | 添加主播对话框                |
-| `recordings`     | 录制文件页                    |
-| `postprocess`    | 后处理流水线页                |
-| `relay`          | 转发流页                      |
-| `finder`         | 主播查找页                    |
-| `settings`       | 设置页                        |
-| `usePostprocess` | 后处理任务状态消息            |
-| `setup`          | 首次启动配置向导              |
+| Top-level key    | Description                           |
+| ---------------- | ------------------------------------- |
+| `nav`            | Sidebar navigation labels             |
+| `common`         | Shared button text (confirm, cancel…) |
+| `notify`         | System notifications and dialogs      |
+| `home`           | Streamers list page                   |
+| `streamerCard`   | Streamer card component               |
+| `addStreamer`    | Add streamer dialog                   |
+| `recordings`     | Recordings page                       |
+| `postprocess`    | Post-processing pipeline page         |
+| `relay`          | Relay streams page                    |
+| `finder`         | Streamer finder page                  |
+| `settings`       | Settings page                         |
+| `usePostprocess` | Post-processing task status messages  |
+| `setup`          | First-launch setup wizard             |
 
-插值变量使用 `{变量名}` 格式，翻译时保持占位符不变：
+Interpolation variables use the `{variableName}` format. Always keep placeholders as-is when translating:
 
 ```json
-"reconnected": "已重新连接到服务器，{n} 秒后刷新页面…"
+"reconnected": "Reconnected to server, reloading in {n} second(s)…"
 ```

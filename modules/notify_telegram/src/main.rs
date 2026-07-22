@@ -1,18 +1,18 @@
-//! Telegram 通知后处理模块 / Telegram Notification Post-processing Module
+//! Telegram Notification Post-processing Module
 //!
-//! 通过 MTProto 协议将录制信息、封面图和视频文件发送到 Telegram 频道或群组。
-//! 支持超过 2GB 的大文件（自动分割）、HTTP/SOCKS5 代理，以及多次重连重试。
+//! MTProto 、 Telegram 。
+//! 2GB （）、HTTP/SOCKS5 ，。
 //!
 //! Sends recording info, cover image, and video files to a Telegram channel or group
 //! via the MTProto protocol. Supports files over 2GB (auto-split), HTTP/SOCKS5 proxy,
 //! and multiple reconnect retries.
 //!
-//! # 协议 / Protocol
-//! - `--describe`: 输出 JSON 格式的模块元数据 / Output module metadata as JSON
-//! - 环境变量 `PP_INPUT`: 输入视频文件路径 / Input video file path via env var
-//! - 标准输出 `OUTPUT:{path}`: 成功后输出视频路径 / Output video path on success
-//! - 标准输出 `PROGRESS:{done}/{total}`: 进度上报 / Progress reporting
-//! - 标准输出 `STATUS:{speed}`: 上传速度上报 / Upload speed reporting
+//! Protocol
+//! Output module metadata as JSON
+//! Input video file path via env var
+//! Output video path on success
+//! Progress reporting
+//! Upload speed reporting
 
 use std::env;
 use std::fs;
@@ -33,10 +33,10 @@ use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use tokio::io::AsyncReadExt;
 use pp_utils::{param, param_bool, format_duration, format_bytes, format_speed, parse_stem, find_cover, tmp_dir, image_dimensions, video_meta};
 
-/// 进度上报的缩放基数 / Progress reporting scale base
+/// Progress reporting scale base
 const PROGRESS_SCALE: usize = 10_000;
 
-/// 模块元数据 JSON，通过 `--describe` 参数输出。
+/// JSON， `--describe` 。
 /// Module metadata JSON, output via `--describe` argument.
 const DESCRIBE: &str = r#"{
     "id": "notify_telegram",
@@ -88,7 +88,7 @@ const DESCRIBE: &str = r#"{
     ]
 }"#;
 
-/// 若封面图不满足 Telegram 限制（宽+高 < 10000 且宽高比 < 20:1），则等比缩放。
+/// Telegram （+ < 10000  < 20:1），。
 /// Resize cover image if it violates Telegram limits (w+h < 10000 and aspect ratio < 20:1).
 /// Returns Some(new_path) if resized, None if no resize needed.
 fn resize_cover_for_telegram(img: &Path) -> Result<Option<PathBuf>, String> {
@@ -101,7 +101,6 @@ fn resize_cover_for_telegram(img: &Path) -> Result<Option<PathBuf>, String> {
 
     let file_size = fs::metadata(img).map(|m| m.len()).unwrap_or(0);
 
-    // 检查是否需要缩放
     let sum_ok = (w + h) < 10000;
     let ratio_ok = w.max(h) < h.min(w).saturating_mul(20);
     let size_ok = file_size < MAX_PHOTO_BYTES;
@@ -109,12 +108,12 @@ fn resize_cover_for_telegram(img: &Path) -> Result<Option<PathBuf>, String> {
         return Ok(None);
     }
 
-    // 计算目标尺寸：同时满足两个约束
-    // 约束1: w' + h' < 10000  => scale <= 9999 / (w+h)
-    // 约束2: max(w',h') / min(w',h') < 20  => 宽高比不变，只要原始比例 < 20:1 就满足
-    //        若原始比例 >= 20:1，则将长边限制为短边的 19 倍
+    // ：
+    // (w+h)
+    // min(w',h') < 20  => 宽高比不变，只要原始比例 < 20:1 就满足
+    //        >= 20:1， 19
     let (tw, th) = if !ratio_ok {
-        // 先修正宽高比：将长边缩到短边的 19 倍
+        // ： 19
         if w >= h {
             (h * 19, h)
         } else {
@@ -124,9 +123,9 @@ fn resize_cover_for_telegram(img: &Path) -> Result<Option<PathBuf>, String> {
         (w, h)
     };
 
-    // 再检查 sum 约束
+    // sum
     let (tw, th) = if tw + th >= 10000 {
-        // 等比缩放使 w'+h' = 9999
+        // w'+h' = 9999
         let scale = 9999.0 / (tw + th) as f64;
         let nw = ((tw as f64 * scale).floor() as u32).max(1);
         let nh = ((th as f64 * scale).floor() as u32).max(1);
@@ -138,7 +137,7 @@ fn resize_cover_for_telegram(img: &Path) -> Result<Option<PathBuf>, String> {
     let stem = img.file_stem().and_then(|s| s.to_str()).unwrap_or("cover");
     let out_path = tmp_dir().join(format!("{}_tg_resized.jpg", stem));
 
-    // 若文件超过 10MB，逐步降低质量直到满足大小限制
+    // 10MB，
     // If file exceeds 10MB, progressively lower quality until size limit is met
     let q_values: &[&str] = if !size_ok { &["5", "10", "15", "20", "25", "31"] } else { &["2"] };
     let mut success = false;
@@ -168,12 +167,12 @@ fn resize_cover_for_telegram(img: &Path) -> Result<Option<PathBuf>, String> {
     Ok(Some(out_path))
 }
 
-/// 使用 ffmpeg 从视频中提取第一帧作为缩略图（用于 Telegram 视频消息的预览图）。
+/// ffmpeg （ Telegram ）。
 /// Extract the first frame from a video as a thumbnail using ffmpeg
 /// (used as preview image for Telegram video messages).
 ///
-/// # 返回值 / Returns
-/// 缩略图文件路径，失败时返回错误。
+/// Returns
+/// ，。
 /// Thumbnail file path, or error on failure.
 fn extract_video_thumbnail(input: &Path) -> Result<PathBuf, String> {
     let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("recording");
@@ -191,17 +190,17 @@ fn extract_video_thumbnail(input: &Path) -> Result<PathBuf, String> {
     Ok(thumb_path)
 }
 
-/// 将视频文件按大小分割为多个片段（用于绕过 Telegram 2GB 文件大小限制）。
-/// 若文件大小未超过限制则直接返回原文件路径。
+/// （ Telegram 2GB ）。
+/// 。
 ///
 /// Split a video file into segments by size (to work around Telegram's 2GB file size limit).
 /// Returns the original file path if it doesn't exceed the limit.
 ///
-/// # 参数 / Parameters
-/// - `input`: 输入视频路径 / Input video path
-/// - `max_bytes`: 每个片段的最大字节数 / Maximum bytes per segment
+/// Parameters
+/// Input video path
+/// Maximum bytes per segment
 ///
-/// 用 ffprobe 获取视频的平均比特率（bps），失败时返回 None。
+/// ffprobe （bps）， None。
 ///
 /// Get the average bitrate of a video via ffprobe (bps), returns None on failure.
 fn probe_bitrate(input: &Path) -> Option<u64> {
@@ -215,14 +214,14 @@ fn probe_bitrate(input: &Path) -> Option<u64> {
     s.trim().parse::<u64>().ok()
 }
 
-/// 将单个文件切分为不超过 max_bytes 的若干段，返回所有段的路径。
+/// max_bytes ，。
 /// Split a single file into segments not exceeding max_bytes, returns all segment paths.
 fn split_one(input: &Path, max_bytes: u64, dir: &Path, stem: &str, ext: &str, offset: usize) -> Result<Vec<PathBuf>, String> {
     let file_size = fs::metadata(input).map_err(|e| format!("stat failed: {}", e))?.len();
     let duration = pp_utils::video_duration(input).unwrap_or(0.0);
     if duration <= 0.0 { return Err("cannot split: unable to determine video duration".to_string()); }
 
-    // 优先用 ffprobe 比特率计算，回退到文件大小比例，均留 10% 余量
+    // ffprobe ，， 10%
     // Prefer ffprobe bitrate for calculation, fall back to file-size ratio; keep 10% margin
     let seg_duration = if let Some(bps) = probe_bitrate(input).filter(|&b| b > 0) {
         let max_bits = (max_bytes as f64 * 0.90) * 8.0;
@@ -234,7 +233,7 @@ fn split_one(input: &Path, max_bytes: u64, dir: &Path, stem: &str, ext: &str, of
 
     let n_segs = (duration / seg_duration).ceil() as usize + 1;
 
-    // ffmpeg segment 模式不支持任意起始编号，先生成临时名再重命名
+    // ffmpeg segment ，
     // ffmpeg segment mode doesn't support arbitrary start numbers; generate then rename
     let tmp_dir_path = dir.join(format!("_split_tmp_{}", offset));
     fs::create_dir_all(&tmp_dir_path).map_err(|e| format!("mkdir failed: {}", e))?;
@@ -260,7 +259,7 @@ fn split_one(input: &Path, max_bytes: u64, dir: &Path, stem: &str, ext: &str, of
 
     if segments.is_empty() { return Err("ffmpeg produced no segment files".to_string()); }
 
-    // 重命名为最终路径，编号从 offset 开始
+    // ， offset
     // Rename to final paths starting from offset
     let mut result = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
@@ -279,21 +278,19 @@ fn split_video(input: &Path, max_bytes: u64) -> Result<Vec<PathBuf>, String> {
     let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("part");
     let ext  = input.extension().and_then(|e| e.to_str()).unwrap_or("mp4");
     let dir  = tmp_dir();
-    // 第一次切分
     // Initial split
     let initial = split_one(input, max_bytes, &dir, stem, ext, 0)?;
 
-    // 对仍然超大的分片递归再切，最多重试 2 次
+    // ， 2
     // Recursively re-split any oversized segments, up to 2 retries
     let mut final_segments: Vec<PathBuf> = Vec::new();
     let mut counter = initial.len();
     for seg in initial {
         let seg_size = fs::metadata(&seg).map(|m| m.len()).unwrap_or(0);
         if seg_size > max_bytes {
-            // 递归切分，编号从当前 counter 开始
+            // ， counter
             let sub = split_one(&seg, max_bytes, &dir, stem, ext, counter)?;
             counter += sub.len();
-            // 删除超大的中间文件
             let _ = fs::remove_file(&seg);
             final_segments.extend(sub);
         } else {
@@ -312,7 +309,7 @@ fn split_video(input: &Path, max_bytes: u64) -> Result<Vec<PathBuf>, String> {
     Ok(final_segments)
 }
 
-/// 获取 Telegram 会话文件路径（存储在系统配置目录下）。
+/// Telegram （）。
 /// Get the Telegram session file path (stored in the system config directory).
 fn session_path(api_id: i32) -> PathBuf {
     let base = dirs::config_dir()
@@ -322,10 +319,10 @@ fn session_path(api_id: i32) -> PathBuf {
     base.join(format!("{}.db", api_id))
 }
 
-/// 根据数字 chat_id 构建 Telegram PeerRef（不需要网络请求）。
+/// chat_id  Telegram PeerRef（）。
 /// Build a Telegram PeerRef from a numeric chat_id (no network request needed).
 ///
-/// 支持用户、普通群组和超级群组/频道的 ID 格式。
+/// 、/ ID 。
 /// Supports user, regular group, and supergroup/channel ID formats.
 fn build_peer_ref(chat_id: i64) -> PeerRef {
     let id = if chat_id < -1_000_000_000_000 {
@@ -340,21 +337,21 @@ fn build_peer_ref(chat_id: i64) -> PeerRef {
     PeerRef { id, auth: PeerAuth::default() }
 }
 
-/// 计算字符串的 UTF-16 编码长度（Telegram 消息实体使用 UTF-16 偏移量）。
+/// UTF-16 （Telegram  UTF-16 ）。
 /// Calculate the UTF-16 encoded length of a string (Telegram message entities use UTF-16 offsets).
 fn utf16_len(s: &str) -> usize { s.encode_utf16().count() }
 
-/// 构建 Telegram 消息的文字内容和格式化实体（粗体标签、Hashtag、代码块、引用块）。
+/// Telegram （、Hashtag、、）。
 /// Build the text content and formatting entities for a Telegram message
 /// (bold labels, hashtag, code blocks, blockquote).
 ///
-/// # 参数 / Parameters
-/// - `model_name`: 主播名（用作 Hashtag）/ Model name (used as hashtag)
-/// - `timestamp`: 录制时间戳字符串 / Recording timestamp string
-/// - `duration_str`: 格式化后的时长字符串 / Formatted duration string
-/// - `file_name`: 文件名 / Filename
-/// - `file_size`: 格式化后的文件大小字符串 / Formatted file size string
-/// - `part_label`: 分片标签（当前/总数），None 表示不分片 / Part label (current/total), None if not split
+/// Parameters
+/// - `model_name`: （ Hashtag）/ Model name (used as hashtag)
+/// Recording timestamp string
+/// Formatted duration string
+/// Filename
+/// Formatted file size string
+/// Part label (current/total), None if not split
 fn build_caption(
     model_name: &str, timestamp: &str, duration_str: &str,
     file_name: &str, file_size: &str,
@@ -363,7 +360,7 @@ fn build_caption(
     let mut text = String::new();
     let mut entities: Vec<tl::enums::MessageEntity> = Vec::new();
 
-    // 宏：添加一行"粗体标签: 值"并附加对应的格式化实体
+    // ：": "
     // Macro: add a "bold label: value" line with corresponding formatting entities
     macro_rules! push_line {
         ($label:expr, $value:expr, $entity:expr) => {{
@@ -378,13 +375,13 @@ fn build_caption(
         }};
     }
 
-    // 第一行：主播名作为 Hashtag / First line: model name as hashtag
+    // First line: model name as hashtag
     let hashtag_value = format!("#{}", model_name);
     push_line!("ModelName", &hashtag_value, |offset, length| {
         tl::types::MessageEntityHashtag { offset, length }.into()
     });
 
-    // 后续行：时间戳、时长、文件名、文件大小（代码格式）
+    // ：、、、（）
     // Subsequent lines: timestamp, duration, filename, file size (code format)
     for (label, value) in &[("Timestamp", timestamp), ("Duration", duration_str), ("FileName", file_name), ("FileSize", file_size)] {
         text.push('\n');
@@ -393,7 +390,7 @@ fn build_caption(
         });
     }
 
-    // 可选的分片标签 / Optional part label
+    // Optional part label
     if let Some((cur, total)) = part_label {
         let part_value = format!("{}/{}", cur, total);
         text.push('\n');
@@ -402,13 +399,13 @@ fn build_caption(
         });
     }
 
-    // 将整个消息包裹在引用块中 / Wrap the entire message in a blockquote
+    // Wrap the entire message in a blockquote
     let total_len = utf16_len(&text) as i32;
     entities.push(tl::types::MessageEntityBlockquote { collapsed: false, offset: 0, length: total_len }.into());
     (text, entities)
 }
 
-/// 解析 Telegram Peer（优先通过 username 解析，其次使用数字 chat_id）。
+/// Telegram Peer（ username ， chat_id）。
 /// Resolve a Telegram Peer (prefers username resolution, falls back to numeric chat_id).
 async fn resolve_peer(client: &Client, chat_id: i64, username: &str) -> Result<PeerRef, String> {
     if !username.is_empty() {
@@ -420,10 +417,10 @@ async fn resolve_peer(client: &Client, chat_id: i64, username: &str) -> Result<P
     Ok(build_peer_ref(chat_id))
 }
 
-/// 上传文件到 Telegram，支持断点续传、进度上报。
+/// Telegram，、。
 ///
-/// 直接调用底层 `SaveBigFilePart` TL 函数，保持同一 `file_id`，
-/// 网络中断后从上次成功的分块处继续，而不是从头重传。
+/// `SaveBigFilePart` TL ， `file_id`，
+/// ，。
 ///
 /// Upload a file to Telegram with resumable upload and progress reporting.
 ///
@@ -434,11 +431,11 @@ async fn upload_with_progress(
     client: &Client, path: &Path,
     done: Arc<AtomicUsize>, total: usize,
 ) -> Result<Uploaded, String> {
-    // 每个分块 512 KB（Telegram 最大分块大小）/ 512 KB per chunk (Telegram max chunk size)
+    // 512 KB（Telegram ）/ 512 KB per chunk (Telegram max chunk size)
     const CHUNK_SIZE: usize = 512 * 1024;
-    // 单个分块的最大重试次数 / Max retries per chunk
+    // Max retries per chunk
     const MAX_CHUNK_RETRIES: u32 = 20;
-    // 重试延迟序列（秒）/ Retry delay sequence (seconds)
+    // （）/ Retry delay sequence (seconds)
     const RETRY_DELAYS: [u64; 6] = [10, 20, 30, 40, 50, 60];
 
     let name = path.file_name().unwrap().to_string_lossy().to_string();
@@ -448,7 +445,7 @@ async fn upload_with_progress(
     let size = file.metadata().await
         .map_err(|e| format!("metadata failed: {}", e))?.len() as usize;
 
-    // 与 grammers 保持一致：> 10MB 用大文件接口，否则用小文件接口
+    // grammers ：> 10MB ，
     // Match grammers behavior: use big-file API for >10MB, small-file API otherwise.
     // InputMediaUploadedPhoto requires InputFile (small), not InputFileBig — using the wrong
     // one causes PHOTO_SAVE_FILE_INVALID.
@@ -456,7 +453,7 @@ async fn upload_with_progress(
     let is_big = size > BIG_FILE_THRESHOLD;
 
     let total_parts = size.div_ceil(CHUNK_SIZE) as i32;
-    // 生成一次性 file_id，整个上传过程保持不变 / Generate file_id once; keep it for the entire upload
+    // Generate file_id once; keep it for the entire upload
     let file_id = {
         use std::time::{SystemTime, UNIX_EPOCH};
         let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
@@ -466,11 +463,11 @@ async fn upload_with_progress(
     let mut buf = vec![0u8; CHUNK_SIZE];
     let mut speed_bytes: usize = 0;
     let mut speed_last = Instant::now();
-    // md5 仅小文件需要 / md5 only needed for small files
+    // md5 only needed for small files
     let mut md5_ctx = md5::Context::new();
 
     for part in 0..total_parts {
-        // 读取当前分块 / Read current chunk
+        // Read current chunk
         let mut read = 0usize;
         while read < CHUNK_SIZE {
             match file.read(&mut buf[read..]).await {
@@ -483,7 +480,7 @@ async fn upload_with_progress(
         let chunk = buf[..read].to_vec();
         if !is_big { md5_ctx.consume(&chunk); }
 
-        // 带重试的分块上传 / Upload chunk with retry
+        // Upload chunk with retry
         let mut chunk_attempt = 0u32;
         loop {
             let result = if is_big {
@@ -524,7 +521,7 @@ async fn upload_with_progress(
             }
         }
 
-        // 更新进度和速度 / Update progress and speed
+        // Update progress and speed
         if total > 0 {
             let new_done = done.fetch_add(read, Ordering::Relaxed) + read;
             speed_bytes += read;
@@ -555,15 +552,15 @@ async fn upload_with_progress(
     }))
 }
 
-/// 核心异步函数：建立 Telegram 连接、上传文件并发送消息。
+/// ： Telegram 、。
 /// Core async function: establish Telegram connection, upload files, and send messages.
 ///
-/// 流程：
-/// 1. 建立 MTProto 连接并进行 Bot 登录
-/// 2. 转换封面图格式（若需要）
-/// 3. 转换/重封装视频格式（若需要）
-/// 4. 并行上传封面图、视频缩略图和视频文件
-/// 5. 以相册形式发送（封面图 + 视频，每批最多 10 条）
+/// ：
+/// 1.  MTProto  Bot
+/// 2. （）
+/// 3. /（）
+/// 4. 、
+/// 5. （ + ， 10 ）
 ///
 /// Flow:
 /// 1. Establish MTProto connection and bot sign-in
@@ -583,7 +580,7 @@ async fn upload_and_send(
     let (base_caption_text, base_caption_entities) =
         build_caption(model_name, timestamp, duration_str, file_name, file_size_str, None);
 
-    // 打开或创建 SQLite 会话文件 / Open or create SQLite session file
+    // Open or create SQLite session file
     let session = Arc::new(
         SqliteSession::open(&session_path(api_id)).await
             .map_err(|e| format!("open session failed: {}", e))?,
@@ -594,11 +591,11 @@ async fn upload_and_send(
         ..Default::default()
     };
 
-    // 创建连接池并在后台运行 / Create connection pool and run in background
+    // Create connection pool and run in background
     let pool = SenderPool::with_configuration(Arc::clone(&session), api_id, conn_params);
     let runner = pool.runner;
     tokio::spawn(async move { runner.run().await });
-    // 配置激进的 retry policy：I/O 错误视为 5 秒 flood，flood wait 阈值提高到 5 分钟
+    // retry policy：I/O  5  flood，flood wait  5
     // Aggressive retry policy: treat I/O errors as 5s flood, raise flood-wait threshold to 5 min
     let client = Client::with_configuration(pool.handle, ClientConfiguration {
         retry_policy: Box::new(AutoSleep {
@@ -608,7 +605,7 @@ async fn upload_and_send(
         auto_cache_peers: true,
     });
 
-    // Bot 登录（会话已存在时跳过）/ Bot sign-in (skipped if session already exists)
+    // Bot （）/ Bot sign-in (skipped if session already exists)
     if !client.is_authorized().await.map_err(|e| format!("is_authorized failed: {}", e))? {
         client.bot_sign_in(bot_token, api_hash).await
             .map_err(|e| format!("bot_sign_in failed: {}", e))?;
@@ -616,7 +613,7 @@ async fn upload_and_send(
 
     let peer = resolve_peer(&client, chat_id, username).await?;
 
-    // 处理封面图：非 jpg/png 格式需先用 ffmpeg 转换，然后检查尺寸限制
+    // ： jpg/png  ffmpeg ，
     // Handle cover image: non-jpg/png formats need ffmpeg conversion first, then check dimension limits
     let converted_cover: Option<PathBuf>;
     let resized_cover: Option<PathBuf>;
@@ -638,7 +635,7 @@ async fn upload_and_send(
             converted_cover = Some(tmp);
         }
         let after_format: &Path = converted_cover.as_deref().unwrap_or(img);
-        // 检查并等比缩放封面图以满足 Telegram 尺寸限制
+        // Telegram
         // Check and proportionally resize cover image to meet Telegram dimension limits
         resized_cover = resize_cover_for_telegram(after_format)?;
         effective_cover = resized_cover.as_deref().or(Some(after_format));
@@ -648,7 +645,7 @@ async fn upload_and_send(
         effective_cover = None;
     }
 
-    // 处理视频文件：非 mp4/mkv 格式需先重封装，重封装失败则转码
+    // ： mp4/mkv ，
     // Handle video files: non-mp4/mkv formats need remuxing, falls back to transcoding
     let mut converted_parts: Vec<PathBuf> = Vec::new();
     let effective_parts: Vec<PathBuf> = if send_video {
@@ -662,14 +659,14 @@ async fn upload_and_send(
                     "{}_tg_tmp.mkv",
                     part.file_stem().and_then(|s| s.to_str()).unwrap_or("video")
                 ));
-                // 先尝试无损重封装 / Try lossless remux first
+                // Try lossless remux first
                 let remux_ok = Command::new("ffmpeg")
                     .args(["-y", "-i"]).arg(part)
                     .args(["-c", "copy", "-movflags", "+faststart"]).arg(&tmp)
                     .stdout(Stdio::null()).stderr(Stdio::null())
                     .status().map_err(|e| format!("ffmpeg not found: {}", e))?.success();
                 if !remux_ok {
-                    // 重封装失败则转码为 H.264 + AAC / Fall back to H.264 + AAC transcoding
+                    // Fall back to H.264 + AAC transcoding
                     let ok = Command::new("ffmpeg")
                         .args(["-y", "-i"]).arg(part)
                         .args(["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
@@ -687,7 +684,7 @@ async fn upload_and_send(
         vec![input.to_path_buf()]
     };
 
-    // 提取每个视频片段的缩略图和元数据 / Extract thumbnail and metadata for each video part
+    // Extract thumbnail and metadata for each video part
     struct PartMeta { thumb_path: Option<PathBuf>, duration: f64, w: i32, h: i32 }
     let part_metas: Vec<PartMeta> = if send_video {
         effective_parts.iter().map(|p| {
@@ -697,7 +694,7 @@ async fn upload_and_send(
         }).collect()
     } else { vec![] };
 
-    // 计算所有需要上传的文件总大小（用于进度计算）
+    // （）
     // Calculate total size of all files to upload (for progress calculation)
     let cover_size = effective_cover.and_then(|p| fs::metadata(p).ok()).map(|m| m.len() as usize).unwrap_or(0);
     let video_size: usize = if send_video {
@@ -709,18 +706,18 @@ async fn upload_and_send(
         .map(|m| m.len() as usize).sum();
     let upload_total = cover_size + video_size + thumb_size;
 
-    // 共享的已上传字节计数器 / Shared uploaded bytes counter
+    // Shared uploaded bytes counter
     let done = Arc::new(AtomicUsize::new(0));
 
     if send_video {
-        // 固化后的视频分片，包含服务端永久 Media 引用和元数据
+        // ， Media
         // Committed video parts: server-side permanent Media reference + metadata
         struct CommittedPart {
             media: grammers_client::media::Media,  // 已通过 UploadMedia 固化 / committed via UploadMedia
         }
 
-        // 上传单个文件后立即调用 messages.UploadMedia 固化到服务端，带重试。
-        // 固化后的 Media 不受上传 session TTL 限制（约 10 分钟），可安全地在之后发送。
+        // messages.UploadMedia ，。
+        // Media  session TTL （ 10 ），。
         //
         // Upload a file then immediately commit it via messages.UploadMedia, with retry.
         // Committed Media is not subject to the ~10-minute upload session TTL.
@@ -756,7 +753,7 @@ async fn upload_and_send(
             }
         }
 
-        // 上传封面图并立即固化 / Upload cover and commit immediately
+        // Upload cover and commit immediately
         let committed_cover: Option<grammers_client::media::Media> = if let Some(img) = effective_cover {
             let uploaded = upload_with_progress(&client, img, Arc::clone(&done), upload_total).await?;
             let raw: tl::enums::InputMedia = tl::types::InputMediaUploadedPhoto {
@@ -770,7 +767,7 @@ async fn upload_and_send(
         if let Some(ref tmp) = converted_cover { let _ = fs::remove_file(tmp); }
         if let Some(ref tmp) = resized_cover { let _ = fs::remove_file(tmp); }
 
-        // 串行上传每个视频片段及其缩略图，上传后立即固化。
+        // ，。
         // Serial upload + immediate commit for each video part and its thumbnail.
         let do_upload_and_commit = |done: Arc<AtomicUsize>| {
             let client = &client;
@@ -788,7 +785,7 @@ async fn upload_and_send(
 
                     let video_uploaded = upload_with_progress(client, part_path, Arc::clone(&done), upload_total).await?;
 
-                    // 直接构建 InputMediaUploadedDocument，避免访问私有字段
+                    // InputMediaUploadedDocument，
                     // Build InputMediaUploadedDocument directly to avoid accessing private fields
                     let ext = part_path.extension().and_then(|e| e.to_str()).unwrap_or("mp4").to_lowercase();
                     let mime = if ext == "mkv" { "video/x-matroska" } else { "video/mp4" };
@@ -833,7 +830,7 @@ async fn upload_and_send(
 
         let total_parts = committed_parts.len();
 
-        // 辅助函数：从固化的 Media 重建 InputMedia 列表（用于发送重试）
+        // ： Media  InputMedia （）
         // Helper: rebuild InputMedia list from committed Media (for send retry)
         let build_items = |cover: &Option<grammers_client::media::Media>,
                            parts: &Vec<CommittedPart>| -> Vec<InputMedia> {
@@ -850,8 +847,8 @@ async fn upload_and_send(
             items
         };
 
-        // 每批最多 10 条发送相册。固化后的 InputMedia 不会有 FILE_PART_MISSING，
-        // 但仍保留重传逻辑以防万一。
+        // 10 。 InputMedia  FILE_PART_MISSING，
+        // 。
         // Send album in batches of max 10. Committed InputMedia won't get FILE_PART_MISSING,
         // but keep re-upload logic as a safety net.
         const MAX_ALBUM: usize = 10;
@@ -902,7 +899,7 @@ async fn upload_and_send(
             committed_parts = do_upload_and_commit(Arc::clone(&done)).await?;
         }
     } else if let Some(img) = effective_cover {
-        // 仅发送封面图和说明文字 / Send cover image with caption only
+        // Send cover image with caption only
         let uploaded = upload_with_progress(&client, img, Arc::clone(&done), upload_total).await?;
         if let Some(ref tmp) = converted_cover { let _ = fs::remove_file(tmp); }
         if let Some(ref tmp) = resized_cover { let _ = fs::remove_file(tmp); }
@@ -927,7 +924,7 @@ async fn upload_and_send(
             }
         }
     } else {
-        // 无封面图：仅发送文字消息，发送失败立即重试（不重新上传）
+        // ：，（）
         // No cover image: send text message only; retry send on failure without re-uploading
         const MAX_SEND: u32 = 3;
         const SEND_RETRY_DELAY: Duration = Duration::from_secs(30);
@@ -953,14 +950,14 @@ async fn upload_and_send(
     Ok(())
 }
 
-/// 模块主逻辑：读取参数、准备文件、带重试的上传发送。
+/// ：、、。
 /// Main module logic: read parameters, prepare files, upload and send with retries.
 fn run() -> Result<(), String> {
     let input_str = env::var("PP_INPUT").map_err(|_| "PP_INPUT not set".to_string())?;
     let input = PathBuf::from(&input_str);
     if !input.exists() { return Err(format!("Input file not found: {}", input.display())); }
 
-    // 读取并验证必填参数 / Read and validate required parameters
+    // Read and validate required parameters
     let api_id: i32 = {
         let s = param("api_id", "");
         if s.is_empty() { return Err("api_id is required".to_string()); }
@@ -979,7 +976,7 @@ fn run() -> Result<(), String> {
     let username   = param("username", "");
     let send_video = param_bool("send_video", true);
 
-    // 从文件名解析元数据 / Parse metadata from filename
+    // Parse metadata from filename
     let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("recording");
     let (model_name, timestamp) = parse_stem(stem);
     let file_size = fs::metadata(&input).map(|m| m.len()).unwrap_or(0);
@@ -991,13 +988,13 @@ fn run() -> Result<(), String> {
 
     let cover = find_cover(&input);
 
-    // Telegram 单文件大小限制为 2GB
+    // Telegram  2GB
     // Telegram single file size limit is 2GB
     const TG_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
     let video_parts: Vec<PathBuf> = if send_video { split_video(&input, TG_MAX_BYTES)? } else { vec![input.clone()] };
     let is_split = video_parts.len() > 1 || video_parts.first().map(|p| p != &input).unwrap_or(false);
 
-    // 构建 Tokio 运行时并执行异步上传，最多重试 3 次
+    // Tokio ， 3
     // Build Tokio runtime and execute async upload with up to 3 retries
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -1028,7 +1025,7 @@ fn run() -> Result<(), String> {
             }
         })?;
 
-    // 清理分割产生的临时片段文件 / Clean up temporary segment files from splitting
+    // Clean up temporary segment files from splitting
     if is_split {
         for part in &video_parts {
             if part != &input { let _ = fs::remove_file(part); }
@@ -1039,7 +1036,7 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-/// 程序入口：处理 `--describe` 参数或执行主逻辑。
+/// ： `--describe` 。
 /// Entry point: handle `--describe` argument or execute main logic.
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -1047,7 +1044,7 @@ fn main() {
         print!("{}", DESCRIBE);
         return;
     }
-    // 确保临时目录存在 / Ensure temp directory exists
+    // Ensure temp directory exists
     tmp_dir();
     if let Err(e) = run() {
         eprintln!("{}", e);

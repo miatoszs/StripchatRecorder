@@ -32,30 +32,30 @@ const store = useSettingsStore();
 const moduleLocaleStore = useModuleLocaleStore();
 const localesStore = useLocalesStore();
 
-// ── 步骤控制 / Step control ──────────────────────────────────────────────────
+// Step control ──────────────────────────────────────────────────
 const TOTAL_STEPS = 3;
 const step = ref(1);
 const saving = ref(false);
 const error = ref("");
 
-/** 步骤切换方向，用于决定滑动动画方向 / Step direction for slide animation */
+/*Step direction for slide animation */
 const stepTransition = ref("step-forward");
 
-// ── 表单字段 / Form fields ───────────────────────────────────────────────────
+// Form fields ───────────────────────────────────────────────────
 const language = ref("en-US");
 const outputDir = ref("");
 const apiProxy = ref("");
 const scMirror = ref("");
 const cdnProxy = ref("");
 
-/** 可用语言列表（从共享 store 读取，由 App.vue 统一维护）
+/** （ store ， App.vue ）
  * Available locales (from shared store, maintained by App.vue) */
-// 直接使用 store 的 ref，保持响应式；不能赋给普通变量（会丢失响应式）
+// store  ref，；（）
 // Use the store's ref directly to keep reactivity; assigning to a plain variable breaks it
 
 onMounted(async () => {
-	// App.vue 可能还未完成 onMounted（例如首次配置路由直接到 /setup），
-	// 确保语言列表已加载；若已加载则 refresh() 内部会快速返回已有结果。
+	// App.vue  onMounted（ /setup），
+	// ； refresh() 。
 	// App.vue may not have finished its onMounted yet (e.g. first-launch routing to /setup).
 	// Ensure the locale list is loaded; if already loaded, refresh() returns quickly.
 	if (!localesStore.loaded) {
@@ -71,21 +71,21 @@ onMounted(async () => {
 	cdnProxy.value = s.cdn_proxy_url || "";
 });
 
-// ── 语言切换 / Language switch ───────────────────────────────────────────────
+// Language switch ───────────────────────────────────────────────
 async function setLanguage(lang: string) {
 	language.value = lang;
-	// 先加载消息，再切换 locale，避免 vue-i18n 在消息就绪前以 fallback 语言渲染
+	// ， locale， vue-i18n  fallback
 	// Load messages first, then switch locale to avoid vue-i18n rendering with fallback
 	const { modules: moduleLocales, warning } = await loadLocaleFromServer(lang);
 	locale.value = lang;
 	moduleLocaleStore.setLocales(lang, moduleLocales);
 	if (warning) {
-		// SetupView 没有 toast，用 error ref 展示
+		// SetupView  toast， error ref
 		error.value = t("settings.localeFileInvalid", { file: `${lang}.json` }) + ": " + warning;
 	}
 }
 
-// ── 步骤校验 / Step validation ───────────────────────────────────────────────
+// Step validation ───────────────────────────────────────────────
 const canNext = computed(() => {
 	if (step.value === 2) return outputDir.value.trim().length > 0;
 	return true;
@@ -107,7 +107,7 @@ function back() {
 	}
 }
 
-// ── 完成向导 / Finish wizard ─────────────────────────────────────────────────
+// Finish wizard ─────────────────────────────────────────────────
 async function finish() {
 	if (!outputDir.value.trim()) {
 		error.value = t("setup.outputDirRequired");

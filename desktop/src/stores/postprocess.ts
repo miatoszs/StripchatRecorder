@@ -1,8 +1,8 @@
 /**
- * 后处理流水线状态管理 Store / Post-processing Pipeline State Management Store
+ * Post-processing Pipeline State Management Store
  *
- * 管理后处理模块列表和流水线配置。流水线由有序的节点组成，每个节点对应一个处理模块。
- * 流水线变更后会自动防抖保存（600ms），并支持多客户端实时同步。
+ * 。，。
+ * （600ms），。
  *
  * Manages the post-processing module list and pipeline configuration.
  * The pipeline consists of ordered nodes, each corresponding to a processing module.
@@ -16,8 +16,8 @@ import { useI18n } from "vue-i18n";
 import { useModuleLocaleStore } from "@/stores/moduleLocale";
 
 /**
- * 生成一个随机 ID，优先使用 crypto.randomUUID()，
- * 在非安全上下文（如通过 IP 访问的 HTTP 页面）下降级为 Math.random() 实现。
+ * ID， crypto.randomUUID()，
+ * （ IP  HTTP ） Math.random() 。
  *
  * Generate a random ID, preferring crypto.randomUUID().
  * Falls back to a Math.random()-based implementation in non-secure contexts
@@ -33,26 +33,26 @@ function generateId(): string {
 	});
 }
 
-/** 模块参数定义 / Module parameter definition */
+/*Module parameter definition */
 export interface ParamDef {
-	/** 参数键名 / Parameter key */
+	/*Parameter key */
 	key: string;
-	/** 参数显示标签 / Parameter display label */
+	/*Parameter display label */
 	label: string;
-	/** 参数类型 / Parameter type */
+	/*Parameter type */
 	type: "string" | "number" | "boolean" | "select";
-	/** 参数默认值 / Parameter default value */
+	/*Parameter default value */
 	default: unknown;
-	/** select 类型的可选项 / Options for select type */
+	/*Options for select type */
 	options?: string[];
 }
 
 /**
- * 将参数默认值强制转换为对应类型的 JS 值。
+ * JS 。
  * Coerce a parameter default value to the corresponding JS type.
  *
- * @param type - 参数类型 / Parameter type
- * @param value - 原始值 / Raw value
+ * Parameter type
+ * Raw value
  */
 function coerceDefault(
 	type: ParamDef["type"],
@@ -67,66 +67,66 @@ function coerceDefault(
 	return String(value);
 }
 
-/** 模块 i18n 翻译（单个语言）/ Module i18n translation for a single locale */
+/**  i18n （）/ Module i18n translation for a single locale */
 export interface ModuleI18nLocale {
 	name?: string;
 	description?: string;
 	params?: Record<string, { label?: string }>;
 }
 
-/** 后处理模块信息 / Post-processing module information */
+/*Post-processing module information */
 export interface ModuleInfo {
-	/** 模块唯一 ID / Module unique ID */
+	/*Module unique ID */
 	id: string;
-	/** 模块显示名称 / Module display name */
+	/*Module display name */
 	name: string;
-	/** 模块功能描述 / Module description */
+	/*Module description */
 	description: string;
-	/** 模块参数定义列表 / Module parameter definitions */
+	/*Module parameter definitions */
 	params: ParamDef[];
-	/** 多语言翻译（可选）/ i18n translations (optional) */
+	/** （）/ i18n translations (optional) */
 	i18n?: Record<string, ModuleI18nLocale>;
 }
 
-/** 流水线节点（模块实例）/ Pipeline node (module instance) */
+/** （）/ Pipeline node (module instance) */
 export interface PipelineNode {
-	/** 节点唯一 ID（UUID）/ Node unique ID (UUID) */
+	/**  ID（UUID）/ Node unique ID (UUID) */
 	nodeId: string;
-	/** 对应的模块 ID / Corresponding module ID */
+	/*Corresponding module ID */
 	moduleId: string;
-	/** 节点参数值 / Node parameter values */
+	/*Node parameter values */
 	params: Record<string, string | number | boolean>;
-	/** 是否启用此节点 / Whether this node is enabled */
+	/*Whether this node is enabled */
 	enabled: boolean;
 }
 
-/** 流水线配置 / Pipeline configuration */
+/*Pipeline configuration */
 export interface PipelineConfig {
 	nodes: PipelineNode[];
 }
 
 export const usePostprocessStore = defineStore("postprocess", () => {
-	/** 可用的后处理模块列表 / Available post-processing modules */
+	/*Available post-processing modules */
 	const modules = ref<ModuleInfo[]>([]);
-	/** 当前流水线配置 / Current pipeline configuration */
+	/*Current pipeline configuration */
 	const pipeline = ref<PipelineConfig>({ nodes: [] });
-	/** 是否正在加载 / Whether loading */
+	/*Whether loading */
 	const loading = ref(false);
-	/** 是否正在保存 / Whether saving */
+	/*Whether saving */
 	const saving = ref(false);
-	/** 是否正在本地保存（用于过滤自身触发的 pipeline-updated 事件）/ Whether saving locally (to filter self-triggered pipeline-updated events) */
+	/** （ pipeline-updated ）/ Whether saving locally (to filter self-triggered pipeline-updated events) */
 	let _isSavingLocally = false;
-	/** 流水线是否已从后端加载完成（防止初始化前触发自动保存）/ Whether pipeline has been loaded from backend (prevents auto-save before init) */
+	/** （）/ Whether pipeline has been loaded from backend (prevents auto-save before init) */
 	let _loaded = false;
-	/** 防抖保存定时器 / Debounce save timer */
+	/*Debounce save timer */
 	let _saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const { locale } = useI18n();
 	const moduleLocaleStore = useModuleLocaleStore();
 
 	/**
-	 * 根据当前语言对模块的 name/description/params[].label 应用 i18n 翻译。
-	 * 优先使用服务器端 locale JSON（moduleLocaleStore），回退到模块 --describe 中的 i18n 字段。
+	 * name/description/params[].label  i18n 。
+	 * locale JSON（moduleLocaleStore）， --describe  i18n 。
 	 *
 	 * Apply i18n translations to module name/description/params[].label based on current locale.
 	 * Prefers server-side locale JSON (moduleLocaleStore), falls back to --describe i18n field.
@@ -134,14 +134,14 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 	function applyModuleI18n(raw: ModuleInfo[]): ModuleInfo[] {
 		const lang = locale.value;
 		return raw.map((mod) => {
-			// 优先使用服务器端 locale JSON / Prefer server-side locale JSON
+			// Prefer server-side locale JSON
 			const serverTr = moduleLocaleStore.getModuleLocale(mod.id);
-			// 回退到 --describe 中的 i18n 字段 / Fall back to --describe i18n field
+			// Fall back to --describe i18n field
 			const describeTr = mod.i18n?.[lang] as
 				| { name?: string; description?: string; params?: Record<string, { label?: string }> }
 				| undefined;
 
-			// 合并：服务器端优先，--describe 作为补充
+			// ：，--describe
 			// Merge: server-side takes priority, --describe fills the gaps
 			const name =
 				serverTr?.name ?? describeTr?.name ?? mod.name;
@@ -160,11 +160,11 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 		});
 	}
 
-	/** 原始模块列表（未应用 i18n，用于语言切换时重新翻译）/ Raw module list (before i18n, for re-translating on locale change) */
+	/** （ i18n，）/ Raw module list (before i18n, for re-translating on locale change) */
 	const _rawModules = ref<ModuleInfo[]>([]);
 
 	/**
-	 * 从后端获取可用模块列表。
+	 * 。
 	 * Fetch the available module list from the backend.
 	 */
 	async function fetchModules() {
@@ -173,7 +173,7 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 		modules.value = applyModuleI18n(raw);
 	}
 
-	// 语言切换时重新应用模块翻译 / Re-apply module translations on locale change
+	// Re-apply module translations on locale change
 	watch([locale, () => moduleLocaleStore.locales], () => {
 		if (_rawModules.value.length > 0) {
 			modules.value = applyModuleI18n(_rawModules.value);
@@ -181,7 +181,7 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 	});
 
 	/**
-	 * 从后端获取当前流水线配置。
+	 * 。
 	 * Fetch the current pipeline configuration from the backend.
 	 */
 	async function fetchPipeline() {
@@ -195,7 +195,7 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 	}
 
 	/**
-	 * 将当前流水线配置保存到后端。
+	 * 。
 	 * Save the current pipeline configuration to the backend.
 	 */
 	async function savePipeline() {
@@ -211,7 +211,7 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 		}
 	}
 
-	// 监听流水线变化，防抖 600ms 后自动保存
+	// ， 600ms
 	// Watch pipeline changes and auto-save after 600ms debounce
 	watch(
 		pipeline,
@@ -224,15 +224,15 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 	);
 
 	/**
-	 * 向流水线末尾添加一个新节点，使用模块的默认参数值。
+	 * ，。
 	 * Add a new node to the end of the pipeline with the module's default parameter values.
 	 *
-	 * @param moduleId - 要添加的模块 ID / Module ID to add
+	 * Module ID to add
 	 */
 	function addNode(moduleId: string) {
 		const mod = modules.value.find((m) => m.id === moduleId);
 		if (!mod) return;
-		// 使用模块定义的默认值初始化参数 / Initialize params with module-defined defaults
+		// Initialize params with module-defined defaults
 		const defaults: Record<string, string | number | boolean> = {};
 		for (const p of mod.params) {
 			defaults[p.key] = coerceDefault(p.type, p.default);
@@ -246,10 +246,10 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 	}
 
 	/**
-	 * 从流水线中移除指定节点。
+	 * 。
 	 * Remove a specific node from the pipeline.
 	 *
-	 * @param nodeId - 要移除的节点 ID / Node ID to remove
+	 * Node ID to remove
 	 */
 	function removeNode(nodeId: string) {
 		pipeline.value.nodes = pipeline.value.nodes.filter(
@@ -258,11 +258,11 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 	}
 
 	/**
-	 * 在流水线中上移或下移指定节点。
+	 * 。
 	 * Move a specific node up or down in the pipeline.
 	 *
-	 * @param nodeId - 要移动的节点 ID / Node ID to move
-	 * @param direction - 移动方向 / Move direction
+	 * Node ID to move
+	 * Move direction
 	 */
 	function moveNode(nodeId: string, direction: "up" | "down") {
 		const idx = pipeline.value.nodes.findIndex((n) => n.nodeId === nodeId);
@@ -278,10 +278,10 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 	let _onPipelineUpdated: (() => void) | null = null;
 
 	/**
-	 * 初始化模块和流水线的实时更新监听器（只执行一次）。
+	 * （）。
 	 * Initialize real-time update listeners for modules and pipeline (executed only once).
 	 *
-	 * @param onPipelineUpdated - 流水线被其他客户端更新时的回调 / Callback when pipeline is updated by another client
+	 * Callback when pipeline is updated by another client
 	 */
 	async function initModuleWatcher(onPipelineUpdated?: () => void) {
 		_onPipelineUpdated = onPipelineUpdated ?? null;
@@ -291,9 +291,9 @@ export const usePostprocessStore = defineStore("postprocess", () => {
 			void fetchModules();
 		});
 		await on("pipeline-updated", (payload) => {
-			// 本地保存时忽略自身触发的事件 / Ignore self-triggered events during local save
+			// Ignore self-triggered events during local save
 			if (_isSavingLocally) return;
-			// 暂时禁用自动保存，防止接收到的配置被立即重新保存
+			// ，
 			// Temporarily disable auto-save to prevent received config from being immediately re-saved
 			_loaded = false;
 			pipeline.value = payload as PipelineConfig;

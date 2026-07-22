@@ -55,36 +55,36 @@
 
 	onMounted(async () => {
 		await Promise.all([store.fetchModules(), store.fetchPipeline()]);
-		// 初始化模块监听器，当其他客户端更新流水线时显示提示
+		// ，
 		// Initialize module watcher; show notification when another client updates the pipeline
 		store.initModuleWatcher(() =>
 			toast(t("postprocess.updatedByOther"), "info"),
 		);
 	});
 
-	/** 当前可用模块 ID 集合 / Set of currently available module IDs */
+	/*Set of currently available module IDs */
 	const availableModuleIds = computed(
 		() => new Set(store.modules.map((m) => m.id)),
 	);
 
 	/**
-	 * 判断节点对应的模块是否已不存在（模块文件被删除）。
+	 * （）。
 	 * Check if a node's module is missing (module file was deleted).
 	 */
 	function isModuleMissing(node: PipelineNode) {
 		return !availableModuleIds.value.has(node.moduleId);
 	}
 
-	// 拖拽排序状态 / Drag-and-drop sorting state
-	/** 正在拖拽的节点索引 / Index of the node being dragged */
+	// Drag-and-drop sorting state
+	/*Index of the node being dragged */
 	const dragIndex = ref<number | null>(null);
-	/** 拖拽悬停的目标节点索引 / Index of the node being dragged over */
+	/*Index of the node being dragged over */
 	const dragOverIndex = ref<number | null>(null);
-	/** 是否正在拖拽手柄（防止整个卡片触发拖拽）/ Whether dragging via handle (prevents card from triggering drag) */
+	/** （）/ Whether dragging via handle (prevents card from triggering drag) */
 	const isDraggingHandle = ref(false);
 
 	/**
-	 * 拖拽开始：记录源节点索引。
+	 * ：。
 	 * Drag start: record source node index.
 	 */
 	function onDragStart(e: DragEvent, idx: number) {
@@ -93,7 +93,7 @@
 	}
 
 	/**
-	 * 拖拽经过：更新悬停目标索引。
+	 * ：。
 	 * Drag over: update hover target index.
 	 */
 	function onDragOver(e: DragEvent, idx: number) {
@@ -102,7 +102,7 @@
 	}
 
 	/**
-	 * 放置：执行节点位置交换。
+	 * ：。
 	 * Drop: perform node position swap.
 	 */
 	function onDrop(e: DragEvent, idx: number) {
@@ -120,7 +120,7 @@
 		dragOverIndex.value = null;
 	}
 	/**
-	 * 拖拽结束：清理拖拽状态。
+	 * ：。
 	 * Drag end: clean up drag state.
 	 */
 	function onDragEnd() {
@@ -129,11 +129,11 @@
 		isDraggingHandle.value = false;
 	}
 
-	/** 是否显示模块选择器对话框 / Whether to show the module picker dialog */
+	/*Whether to show the module picker dialog */
 	const showPicker = ref(false);
 
 	/**
-	 * 打开模块选择器（先刷新模块列表）。
+	 * （）。
 	 * Open the module picker (refresh module list first).
 	 */
 	async function openPicker() {
@@ -141,33 +141,33 @@
 		showPicker.value = true;
 	}
 
-	/** 已在流水线中使用的模块 ID 集合（每个模块只能添加一次）/ Set of module IDs already in the pipeline (each module can only be added once) */
+	/**  ID （）/ Set of module IDs already in the pipeline (each module can only be added once) */
 	const usedModuleIds = computed(
 		() => new Set(store.pipeline.nodes.map((n) => n.moduleId)),
 	);
 
-	/** 尚未添加到流水线的可用模块列表 / Available modules not yet added to the pipeline */
+	/*Available modules not yet added to the pipeline */
 	const availableModules = computed(() =>
 		store.modules.filter((m) => !usedModuleIds.value.has(m.id)),
 	);
 
 	/**
-	 * 将指定模块添加到流水线并关闭选择器。
+	 * 。
 	 * Add the specified module to the pipeline and close the picker.
 	 *
-	 * @param id - 模块 ID / Module ID
+	 * Module ID
 	 */
 	function addModule(id: string) {
 		store.addNode(id);
 		showPicker.value = false;
 	}
 
-	/** 已启用的节点列表（用于底部统计显示）/ List of enabled nodes (for bottom stats display) */
+	/** （）/ List of enabled nodes (for bottom stats display) */
 	const enabledNodes = computed(() =>
 		store.pipeline.nodes.filter((n) => n.enabled),
 	);
 
-	/** 节点列表附带对应模块信息（用于模板渲染）/ Node list with corresponding module info (for template rendering) */
+	/** （）/ Node list with corresponding module info (for template rendering) */
 	const nodesWithInfo = computed(() =>
 		store.pipeline.nodes.map((node) => ({
 			node,

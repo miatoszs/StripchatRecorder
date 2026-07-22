@@ -31,10 +31,10 @@ onMounted(() => {
   void streamersStore.fetchStreamers();
 });
 
-// 正在添加中的主播集合，防止重复点击
+// ，
 const addingSet = ref(new Set<string>());
 
-// 验证状态缓存：username -> "checking" | "exists" | "not_found" | "timeout"
+// ：username -> "checking" | "exists" | "not_found" | "timeout"
 const verifyCache = ref(new Map<string, "checking" | "exists" | "not_found" | "timeout">());
 
 async function verifyStreamer(username: string) {
@@ -49,7 +49,7 @@ async function verifyStreamer(username: string) {
     m.set(username, res.exists ? "exists" : "not_found");
     verifyCache.value = m;
   } catch {
-    // 网络错误时乐观处理，不阻塞添加
+    // ，
     const m = new Map(verifyCache.value);
     m.set(username, "exists");
     verifyCache.value = m;
@@ -90,7 +90,7 @@ interface PredictionUrls {
   fullImage: string;
 }
 
-/** 人脸搜索结果条目 */
+/**  */
 interface Prediction {
   platform: string;
   model: string;
@@ -137,7 +137,7 @@ interface ModelUrls {
   externalProfile: string;
 }
 
-/** 名字搜索结果条目 */
+/**  */
 interface ModelResult {
   name: string;
   platform: string;

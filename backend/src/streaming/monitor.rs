@@ -1,8 +1,8 @@
-//! 主播状态监控器 / Streamer Status Monitor
+//! Streamer Status Monitor
 //!
-//! 定期轮询所有追踪主播的直播状态，并在状态变化时：
-//! - 向前端发送 `status-update` 事件
-//! - 自动开始/停止录制（根据 auto_record 设置）
+//! ，：
+//! -  `status-update`
+//! - /（ auto_record ）
 //!
 //! Periodically polls the live status of all tracked streamers and on status changes:
 //! - Emits `status-update` events to the frontend
@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// 主播实时状态（序列化后通过 `status-update` 事件发送给前端）。
+/// （ `status-update` ）。
 /// Streamer real-time status (serialized and sent to the frontend via `status-update` events).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct StreamerStatus {
@@ -26,30 +26,30 @@ pub struct StreamerStatus {
     pub is_recording: bool,
     pub is_recordable: bool,
     pub viewers: i64,
-    /// 直播间状态文字（中文）/ Stream status text (Chinese)
+    /// （）/ Stream status text (Chinese)
     pub status: String,
     pub thumbnail_url: Option<String>,
-    /// HLS 播放列表 URL（不序列化，仅供内部使用）/ HLS playlist URL (not serialized, internal use only)
+    /// HLS  URL（，）/ HLS playlist URL (not serialized, internal use only)
     #[serde(skip)]
     pub playlist_url: Option<String>,
 }
 
-/// 主播状态监控器，管理轮询循环和自动录制逻辑。
+/// ，。
 /// Streamer status monitor managing the polling loop and auto-recording logic.
 pub struct StatusMonitor {
-    /// 应用状态 / Application state
+    /// Application state
     state: Arc<AppState>,
-    /// 录制管理器 / Recorder manager
+    /// Recorder manager
     recorder: Arc<RecorderManager>,
-    /// 各主播的最新状态缓存 / Latest status cache per streamer
+    /// Latest status cache per streamer
     statuses: RwLock<HashMap<String, StreamerStatus>>,
-    /// 重启轮询循环的通知发送端（发送后立即中断当前 sleep，以新间隔重新开始）
+    /// （ sleep，）
     /// Sender to notify the polling loop to restart (interrupts current sleep, restarts with new interval)
     pub restart_tx: RwLock<Option<mpsc::Sender<()>>>,
 }
 
 impl StatusMonitor {
-    /// 创建新的状态监控器实例。
+    /// 。
     /// Create a new status monitor instance.
     pub fn new(state: Arc<AppState>, recorder: Arc<RecorderManager>) -> Arc<Self> {
         Arc::new(Self {
@@ -60,13 +60,13 @@ impl StatusMonitor {
         })
     }
 
-    /// 获取指定主播的缓存状态（若不存在则返回 `None`）。
+    /// （ `None`）。
     /// Get the cached status for a specific streamer (returns `None` if not cached).
     pub fn get_status(&self, username: &str) -> Option<StreamerStatus> {
         self.statuses.read().get(username).cloned()
     }
 
-    /// 获取指定主播缓存的 HLS 播放列表 URL（用于快速开始录制，避免重复 API 请求）。
+    /// HLS  URL（， API ）。
     /// Get the cached HLS playlist URL for a streamer (for fast recording start, avoiding repeated API requests).
     pub fn get_cached_playlist_url(&self, username: &str) -> Option<String> {
         self.statuses
@@ -75,7 +75,7 @@ impl StatusMonitor {
             .and_then(|s| s.playlist_url.clone())
     }
 
-    /// 启动监控循环（通用版本，接受任意 emitter）。
+    /// （， emitter）。
     /// Start the monitoring loop (generic version, accepts any emitter).
     #[allow(dead_code)]
     pub async fn start_with_emitter(self: Arc<Self>, emitter: Arc<dyn Emitter>) {
@@ -84,13 +84,13 @@ impl StatusMonitor {
         self.monitor_loop(emitter, restart_rx).await;
     }
 
-    /// 内部版本：直接接受已创建的 restart_rx（供 server 模式使用）。
+    /// ： restart_rx（ server ）。
     /// Internal version: accepts a pre-created restart_rx (used by server mode).
     pub async fn start_with_emitter_inner(self: Arc<Self>, emitter: Arc<dyn Emitter>, restart_rx: mpsc::Receiver<()>) {
         self.monitor_loop(emitter, restart_rx).await;
     }
 
-    /// 通知监控循环立即中断当前等待，以最新的 poll_interval_secs 重新开始计时。
+    /// ， poll_interval_secs 。
     /// Notify the monitor loop to interrupt the current sleep and restart with the latest poll_interval_secs.
     #[allow(dead_code)]
     pub fn notify_interval_changed(&self) {
@@ -99,7 +99,7 @@ impl StatusMonitor {
         }
     }
 
-    /// 监控主循环：立即轮询一次，然后按配置的间隔周期性轮询。
+    /// ：，。
     /// Monitor main loop: poll once immediately, then poll periodically at the configured interval.
     async fn monitor_loop(
         self: Arc<Self>,
@@ -114,7 +114,7 @@ impl StatusMonitor {
 
             tokio::select! {
                 _ = restart_rx.recv() => {
-                    // poll_interval_secs 已变更，立即以新间隔重新开始计时（不立即轮询）
+                    // poll_interval_secs ，（）
                     // poll_interval_secs changed; restart timer with new interval (no immediate poll)
                     tracing::info!("Monitor: poll interval changed, restarting timer");
                     continue;
@@ -126,7 +126,7 @@ impl StatusMonitor {
         }
     }
 
-    /// 尝试为所有满足条件的主播启动录制（通用版本）。
+    /// （）。
     /// Try to start recordings for all eligible streamers (generic version).
     pub async fn try_start_pending_with_emitter(self: &Arc<Self>, emitter: &Arc<dyn Emitter>) {
         let settings = self.state.get_settings();
@@ -167,7 +167,7 @@ impl StatusMonitor {
         }
     }
 
-    /// 对单个主播执行一次状态轮询（通用版本）。
+    /// （）。
     /// Perform a single status poll for one streamer (generic version).
     pub async fn poll_one_with_emitter(
         self: &Arc<Self>,
@@ -203,7 +203,7 @@ impl StatusMonitor {
             .await;
     }
 
-    /// 并发轮询所有追踪主播的状态（通用版本）。
+    /// （）。
     /// Concurrently poll the status of all tracked streamers (generic version).
     pub async fn poll_all_with_emitter(self: &Arc<Self>, emitter: &Arc<dyn Emitter>) {
         let settings = self.state.get_settings();
@@ -251,7 +251,7 @@ impl StatusMonitor {
         }
     }
 
-    /// 轮询单个主播的状态，更新缓存，并根据状态变化触发自动录制逻辑。
+    /// ，，。
     /// Poll a single streamer's status, update the cache, and trigger auto-recording logic based on status changes.
     async fn poll_streamer(
         self: &Arc<Self>,
@@ -298,7 +298,7 @@ impl StatusMonitor {
             username: username.clone(),
             is_online: info.is_online,
             is_recording,
-            // 正在录制时不获取 playlist_url，保留上次缓存的 is_recordable 值，避免按钮被错误禁用
+            // playlist_url， is_recordable ，
             // When recording, playlist_url is not fetched; preserve the last cached is_recordable
             // to avoid incorrectly disabling buttons
             is_recordable: if is_recording {

@@ -1,7 +1,7 @@
-//! Tauri 命令层 / Tauri Command Layer
+//! Tauri Command Layer
 //!
-//! 将 backend commands/ 模块中的业务函数包装为 `#[tauri::command]`，
-//! 供前端通过 `invoke()` 调用。命令名与 server 模式下 HTTP 路由的语义一一对应。
+//! backend commands/  `#[tauri::command]`，
+//! `invoke()` 。 server  HTTP 。
 //!
 //! Wraps backend commands/ functions as `#[tauri::command]` for frontend
 //! invocation via `invoke()`. Command names correspond to HTTP route semantics in server mode.
@@ -32,7 +32,7 @@ pub async fn list_streamers(state: State<'_, DesktopState>) -> CmdResult<serde_j
         .iter()
         .any(|s| state.monitor.get_status(&s.username).is_some());
 
-    // 若无任何缓存状态则触发一次轮询（非阻塞）
+    // （）
     // If no cached status exists, trigger a poll (non-blocking)
     if !has_any_status && !streamers.is_empty() {
         let monitor = Arc::clone(&state.monitor);
@@ -485,7 +485,7 @@ pub async fn remove_missing_pp_results(
 
 // ─── File Ops ─────────────────────────────────────────────────────────────────
 
-/// 打开录制文件（用系统默认播放器）/ Open a recording file with the system default player
+/// （）/ Open a recording file with the system default player
 #[tauri::command]
 pub async fn open_recording(
     path: String,
@@ -496,7 +496,7 @@ pub async fn open_recording(
     Ok(serde_json::json!({ "ok": true }))
 }
 
-/// 在文件管理器中打开输出目录 / Open the output directory in the file manager
+/// Open the output directory in the file manager
 #[tauri::command]
 pub async fn open_output_dir(
     app: tauri::AppHandle,
@@ -508,7 +508,7 @@ pub async fn open_output_dir(
     Ok(serde_json::json!({ "ok": true }))
 }
 
-/// 读取输出目录中的图片文件（base64 编码，用于缩略图显示）
+/// （base64 ，）
 /// Read an image file in the output directory as base64 (for thumbnail display)
 #[tauri::command]
 pub async fn read_output_file(
@@ -519,7 +519,7 @@ pub async fn read_output_file(
     let output_dir = std::path::Path::new(&settings.output_dir);
     let requested = std::path::Path::new(&path);
 
-    // 安全检查：确保请求的文件在输出目录范围内
+    // ：
     // Safety check: ensure requested file is within the output directory
     let canonical_output = output_dir.canonicalize().map_err(|e| e.to_string())?;
     let canonical_requested = requested.canonicalize().map_err(|_| "文件不存在".to_string())?;
@@ -546,7 +546,7 @@ pub async fn read_output_file(
     }))
 }
 
-/// 获取模块输出路径 / Get module output paths
+/// Get module output paths
 #[tauri::command]
 pub async fn get_module_outputs(
     path: String,

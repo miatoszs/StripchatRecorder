@@ -1,14 +1,14 @@
-//! Discord 通知后处理模块 / Discord Notification Post-processing Module
+//! Discord Notification Post-processing Module
 //!
-//! 将录制信息（主播名、时间戳、时长、文件名、文件大小）和封面图
-//! 通过 Discord Webhook 发送到指定频道。
+//! （、、、、）
+//! Discord Webhook 。
 //!
-//! # 协议 / Protocol
-//! - `--describe`: 输出 JSON 格式的模块元数据 / Output module metadata as JSON
-//! - 环境变量 `PP_INPUT`: 输入视频文件路径 / Input video file path via env var
-//! - 标准输出 `OUTPUT:{path}`: 成功后输出视频路径 / Output video path on success
-//! - 标准输出 `PROGRESS:{done}/{total}`: 进度上报 / Progress reporting
-//! - 标准输出 `STATUS:{speed}`: 上传速度上报 / Upload speed reporting
+//! Protocol
+//! Output module metadata as JSON
+//! Input video file path via env var
+//! Output video path on success
+//! Progress reporting
+//! Upload speed reporting
 
 use pp_utils::{
     emit_progress_step, find_cover, format_bytes, format_duration, format_speed, param, parse_stem,
@@ -49,7 +49,7 @@ const DESCRIBE: &str = r#"{
     ]
 }"#;
 
-/// 若封面图超过 Discord 的 10MB 限制，用 ffmpeg 逐步降低质量压缩到限制以内。
+/// Discord  10MB ， ffmpeg 。
 /// If the cover image exceeds Discord's 10 MB limit, compress it with ffmpeg
 /// by progressively lowering quality until it fits.
 fn resize_cover_for_discord(img: &Path) -> Result<Option<PathBuf>, String> {
@@ -63,7 +63,7 @@ fn resize_cover_for_discord(img: &Path) -> Result<Option<PathBuf>, String> {
     let stem = img.file_stem().and_then(|s| s.to_str()).unwrap_or("cover");
     let out_path = tmp_dir().join(format!("{}_dc_resized.jpg", stem));
 
-    // 逐步降低 JPEG 质量（ffmpeg -q:v 越大质量越低）直到文件小于 10MB
+    // JPEG （ffmpeg -q:v ） 10MB
     // Progressively lower JPEG quality until the file is under 10 MB
     for &q in &["5", "10", "15", "20", "25", "31"] {
         let status = Command::new("ffmpeg")
@@ -88,7 +88,7 @@ fn resize_cover_for_discord(img: &Path) -> Result<Option<PathBuf>, String> {
     Err("cover image exceeds Discord 10 MB limit even after compression".to_string())
 }
 
-/// 解析 URL，返回 (host, port, path)
+/// URL， (host, port, path)
 fn parse_url(url: &str) -> Result<(String, u16, String), String> {
     let url = url.trim();
     let (scheme, rest) = if let Some(r) = url.strip_prefix("https://") {
@@ -115,7 +115,7 @@ fn parse_url(url: &str) -> Result<(String, u16, String), String> {
     Ok((host, port, path))
 }
 
-/// 通过 CONNECT 隧道建立到目标的 TcpStream（HTTP 代理）
+/// CONNECT  TcpStream（HTTP ）
 fn connect_via_http_proxy_stream(
     mut stream: TcpStream,
     target_host: &str,
@@ -152,7 +152,7 @@ fn connect_via_http_proxy_stream(
     Ok(stream)
 }
 
-/// 通过 SOCKS5 代理建立 TcpStream
+/// SOCKS5  TcpStream
 fn connect_via_socks5_stream(
     mut stream: TcpStream,
     target_host: &str,
@@ -186,10 +186,10 @@ fn connect_via_socks5_stream(
     Ok(stream)
 }
 
-/// 建立到目标主机的 TCP 连接（支持 HTTP/SOCKS5 代理）
-/// 将 SO_SNDBUF 设为 32KB，使 write_all 在缓冲区满时阻塞，从而获得真实进度。
+/// TCP （ HTTP/SOCKS5 ）
+/// SO_SNDBUF  32KB， write_all ，。
 fn tcp_connect(host: &str, port: u16, proxy: &str) -> Result<TcpStream, String> {
-    // 用 socket2 建立连接，以便设置 SO_SNDBUF
+    // socket2 ， SO_SNDBUF
     let make_stream = |addr: std::net::SocketAddr| -> Result<TcpStream, String> {
         let domain = if addr.is_ipv6() {
             Domain::IPV6
@@ -198,7 +198,7 @@ fn tcp_connect(host: &str, port: u16, proxy: &str) -> Result<TcpStream, String> 
         };
         let sock = Socket::new(domain, Type::STREAM, None)
             .map_err(|e| format!("socket create failed: {}", e))?;
-        // 32 KB 发送缓冲区：让 write_all 在数据真正发出前阻塞，进度才是真实的
+        // 32 KB ： write_all ，
         sock.set_send_buffer_size(32 * 1024)
             .map_err(|e| format!("set SO_SNDBUF failed: {}", e))?;
         sock.connect(&addr.into())
@@ -207,7 +207,6 @@ fn tcp_connect(host: &str, port: u16, proxy: &str) -> Result<TcpStream, String> 
     };
 
     if proxy.is_empty() {
-        // 解析主机名
         let addrs: Vec<std::net::SocketAddr> = format!("{}:{}", host, port)
             .parse::<std::net::SocketAddr>()
             .map(|a| vec![a])
@@ -252,7 +251,7 @@ fn tcp_connect(host: &str, port: u16, proxy: &str) -> Result<TcpStream, String> 
         )
     };
 
-    // 代理连接：先用 socket2 连到代理，设置小缓冲区，再做隧道握手
+    // ： socket2 ，，
     let proxy_addrs: Vec<std::net::SocketAddr> = format!("{}:{}", proxy_host, proxy_port)
         .parse::<std::net::SocketAddr>()
         .map(|a| vec![a])
@@ -292,7 +291,7 @@ fn tcp_connect(host: &str, port: u16, proxy: &str) -> Result<TcpStream, String> 
     Ok(stream)
 }
 
-/// 通过 TLS 包装 TcpStream（用于 HTTPS）
+/// TLS  TcpStream（ HTTPS）
 fn tls_wrap(stream: TcpStream, host: &str) -> Result<rustls_wrapper::TlsStream, String> {
     rustls_wrapper::wrap(stream, host)
 }
@@ -334,8 +333,8 @@ mod rustls_wrapper {
     }
 }
 
-/// 将 multipart body 直接写入 stream，同时上报真实进度和速度。
-/// 这是获得真实上传进度的关键：直接写入 TCP/TLS stream = 直接发送到网络。
+/// multipart body  stream，。
+/// ： TCP/TLS stream = 。
 fn write_multipart_with_progress(
     stream: &mut dyn Write,
     header_bytes: &[u8], // HTTP 请求头
@@ -349,13 +348,13 @@ fn write_multipart_with_progress(
     let mut speed_bytes: u64 = 0;
     let mut speed_last = Instant::now();
 
-    // 写 HTTP 头
+    // HTTP
     stream.write_all(header_bytes)?;
 
-    // 写 multipart 前缀（payload_json + 文件头），不计入进度（很小）
+    // multipart （payload_json + ），（）
     stream.write_all(pre_file)?;
 
-    // 分块写入图片数据，实时上报进度
+    // ，
     const CHUNK: usize = 32 * 1024; // 32 KB per chunk
     let mut offset = 0usize;
     while offset < img_bytes.len() {
@@ -381,15 +380,15 @@ fn write_multipart_with_progress(
         }
     }
 
-    // 写 multipart 结束边界
+    // multipart
     stream.write_all(post_file)?;
     stream.flush()?;
     Ok(())
 }
 
-/// 读取 HTTP 响应，返回状态码和 body
+/// HTTP ， body
 fn read_http_response(stream: &mut dyn Read) -> Result<(u16, String), String> {
-    // 读取响应头直到 \r\n\r\n
+    // \r\n\r\n
     let mut header_buf = Vec::new();
     let mut tmp = [0u8; 1];
     loop {
@@ -412,7 +411,7 @@ fn read_http_response(stream: &mut dyn Read) -> Result<(u16, String), String> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
 
-    // 解析 Content-Length 或 Transfer-Encoding: chunked
+    // Content-Length  Transfer-Encoding: chunked
     let content_length: Option<usize> = header_str
         .lines()
         .find(|l| l.to_lowercase().starts_with("content-length:"))
@@ -429,7 +428,7 @@ fn read_http_response(stream: &mut dyn Read) -> Result<(u16, String), String> {
     } else if is_chunked {
         let mut body = Vec::new();
         loop {
-            // 读取 chunk size 行
+            // chunk size
             let mut size_line = Vec::new();
             loop {
                 stream.read_exact(&mut tmp).unwrap_or(());
@@ -448,7 +447,7 @@ fn read_http_response(stream: &mut dyn Read) -> Result<(u16, String), String> {
             let mut chunk = vec![0u8; chunk_size];
             stream.read_exact(&mut chunk).unwrap_or(());
             body.extend_from_slice(&chunk);
-            // 读取 \r\n
+            // \r\n
             stream.read_exact(&mut [0u8; 2]).unwrap_or(());
         }
         String::from_utf8_lossy(&body).to_string()
@@ -459,7 +458,7 @@ fn read_http_response(stream: &mut dyn Read) -> Result<(u16, String), String> {
     Ok((status, body))
 }
 
-/// 执行一次 Discord Webhook 请求（含封面图或纯文字）。
+/// Discord Webhook （）。
 fn send_once(
     webhook_url: &str,
     proxy: &str,
@@ -490,7 +489,7 @@ fn send_once(
             serde_json::json!({ "username": bot_name, "content": content }).to_string();
         let boundary = "----RustBoundary7f3a9b2c";
 
-        // 构建 multipart 前缀（payload_json 部分 + 文件头）
+        // multipart （payload_json  + ）
         let mut pre_file: Vec<u8> = Vec::new();
         let pj_header = format!(
             "--{b}\r\nContent-Disposition: form-data; name=\"payload_json\"\r\nContent-Type: application/json\r\n\r\n",
@@ -505,7 +504,7 @@ fn send_once(
         );
         pre_file.extend_from_slice(file_header.as_bytes());
 
-        // 构建 multipart 结束边界
+        // multipart
         let mut post_file: Vec<u8> = Vec::new();
         post_file.extend_from_slice(b"\r\n");
         post_file.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
@@ -513,7 +512,7 @@ fn send_once(
         let body_len = pre_file.len() + img_bytes.len() + post_file.len();
         let content_type = format!("multipart/form-data; boundary={}", boundary);
 
-        // 构建 HTTP 请求头
+        // HTTP
         let http_header = format!(
             "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: {ct}\r\nContent-Length: {len}\r\nConnection: close\r\n\r\n",
             path = path, host = host, ct = content_type, len = body_len
@@ -568,7 +567,7 @@ fn send_once(
             }
         }
     } else {
-        // 无封面图：纯文字消息，用 ureq 发送即可
+        // ：， ureq
         let payload = serde_json::json!({ "username": bot_name, "content": content }).to_string();
         let body_len = payload.len();
         let http_header = format!(
@@ -648,7 +647,7 @@ fn run() -> Result<(), String> {
 
     let cover = find_cover(&input);
 
-    // 若封面图超过 Discord 10MB 限制则压缩 / Compress cover if it exceeds Discord's 10 MB limit
+    // Compress cover if it exceeds Discord's 10 MB limit
     let effective_cover: Option<PathBuf> = if let Some(ref img) = cover {
         let resized = resize_cover_for_discord(img)?;
         Some(resized.unwrap_or_else(|| img.clone()))

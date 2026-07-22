@@ -1,7 +1,7 @@
-//! 后处理流水线引擎 / Post-processing Pipeline Engine
+//! Post-processing Pipeline Engine
 //!
-//! 负责发现 modules/ 目录中的后处理模块、执行流水线节点，以及管理模块进程的生命周期。
-//! 每个模块是一个独立的可执行文件，通过环境变量接收参数，通过 stdout 上报进度和输出路径。
+//! modules/ 、，。
+//! ，， stdout 。
 //!
 //! Responsible for discovering post-processing modules in the modules/ directory,
 //! executing pipeline nodes, and managing module process lifecycles.
@@ -16,73 +16,73 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// 模块参数定义（从 `--describe` 输出中反序列化）/ Module parameter definition (deserialized from `--describe` output)
+/// （ `--describe` ）/ Module parameter definition (deserialized from `--describe` output)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParamDef {
-    /// 参数键名 / Parameter key
+    /// Parameter key
     pub key: String,
-    /// 参数显示标签 / Parameter display label
+    /// Parameter display label
     pub label: String,
-    /// 参数类型（"string" / "number" / "boolean" / "select"）/ Parameter type
+    /// "select"）/ Parameter type
     pub r#type: String,
-    /// 参数默认值 / Parameter default value
+    /// Parameter default value
     pub default: serde_json::Value,
-    /// select 类型的可选项 / Options for select type
+    /// Options for select type
     #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<Vec<String>>,
 }
 
-/// 后处理模块信息（从 `--describe` 输出中反序列化）/ Post-processing module info (deserialized from `--describe` output)
+/// （ `--describe` ）/ Post-processing module info (deserialized from `--describe` output)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModuleInfo {
-    /// 模块唯一 ID / Module unique ID
+    /// Module unique ID
     pub id: String,
-    /// 模块显示名称 / Module display name
+    /// Module display name
     pub name: String,
-    /// 模块功能描述 / Module description
+    /// Module description
     pub description: String,
-    /// 模块参数定义列表 / Module parameter definitions
+    /// Module parameter definitions
     pub params: Vec<ParamDef>,
-    /// 多语言翻译（可选，key 为语言代码如 "en-US"）/ i18n translations (optional, key is locale like "en-US")
+    /// （，key  "en-US"）/ i18n translations (optional, key is locale like "en-US")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub i18n: Option<serde_json::Value>,
-    /// 模块可执行文件路径（不序列化，运行时填充）/ Module executable path (not serialized, filled at runtime)
+    /// （，）/ Module executable path (not serialized, filled at runtime)
     #[serde(skip)]
     pub exe_path: PathBuf,
 }
 
-/// 流水线节点（模块实例）/ Pipeline node (module instance)
+/// （）/ Pipeline node (module instance)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PipelineNode {
-    /// 节点唯一 ID（UUID）/ Node unique ID (UUID)
+    /// ID（UUID）/ Node unique ID (UUID)
     pub node_id: String,
-    /// 对应的模块 ID / Corresponding module ID
+    /// Corresponding module ID
     pub module_id: String,
-    /// 节点参数值 / Node parameter values
+    /// Node parameter values
     pub params: HashMap<String, serde_json::Value>,
-    /// 是否启用此节点 / Whether this node is enabled
+    /// Whether this node is enabled
     pub enabled: bool,
 }
 
-/// 流水线配置 / Pipeline configuration
+/// Pipeline configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PipelineConfig {
-    /// 有序的节点列表 / Ordered list of nodes
+    /// Ordered list of nodes
     pub nodes: Vec<PipelineNode>,
 }
 
-/// 返回模块可执行文件所在目录（可执行文件同目录下的 modules/ 文件夹）。
+/// （ modules/ ）。
 /// Returns the modules directory (modules/ folder next to the executable).
 pub fn modules_dir() -> PathBuf {
     exe_dir().join("modules")
 }
 
-/// 扫描 modules/ 目录，发现所有可用的后处理模块。
-/// 对每个可执行文件调用 `--describe` 获取模块元数据。
+/// modules/ ，。
+/// `--describe` 。
 ///
 /// Scan the modules/ directory to discover all available post-processing modules.
 /// Calls `--describe` on each executable to get module metadata.
@@ -105,7 +105,7 @@ pub fn discover_modules() -> Vec<ModuleInfo> {
             continue;
         }
 
-        // 平台相关的可执行文件检测 / Platform-specific executable detection
+        // Platform-specific executable detection
         #[cfg(target_os = "windows")]
         let is_exec = path.extension().and_then(|e| e.to_str()) == Some("exe");
         #[cfg(not(target_os = "windows"))]
@@ -134,7 +134,7 @@ pub fn discover_modules() -> Vec<ModuleInfo> {
     modules
 }
 
-/// 调用模块可执行文件的 `--describe` 参数，解析并返回模块元数据。
+/// `--describe` ，。
 /// Call the module executable with `--describe` and parse the returned module metadata.
 fn describe_module(exe: &PathBuf) -> crate::core::error::Result<ModuleInfo> {
     let output = std::process::Command::new(exe)
@@ -157,42 +157,42 @@ fn describe_module(exe: &PathBuf) -> crate::core::error::Result<ModuleInfo> {
     Ok(info)
 }
 
-/// 单个节点的执行结果 / Execution result of a single node
+/// Execution result of a single node
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeResult {
-    /// 节点 ID / Node ID
+    /// Node ID
     pub node_id: String,
-    /// 模块 ID / Module ID
+    /// Module ID
     pub module_id: String,
-    /// 是否执行成功 / Whether execution succeeded
+    /// Whether execution succeeded
     pub success: bool,
-    /// 结果消息（成功时为最后一行 stdout，失败时为错误信息）/ Result message (last stdout line on success, error message on failure)
+    /// （ stdout，）/ Result message (last stdout line on success, error message on failure)
     pub message: String,
-    /// 模块输出的文件路径（从 `OUTPUT:` 前缀行解析，不序列化）/ Module output file path (parsed from `OUTPUT:` prefix line, not serialized)
+    /// （ `OUTPUT:` ，）/ Module output file path (parsed from `OUTPUT:` prefix line, not serialized)
     #[serde(skip)]
     pub output: Option<PathBuf>,
-    /// 模块是否请求主程序删除其输入文件（从 `DELETE_INPUT` 协议行解析，不序列化）
+    /// （ `DELETE_INPUT` ，）
     /// Whether the module requested the host to delete its input file (parsed from `DELETE_INPUT` protocol line, not serialized)
     #[serde(skip)]
     pub delete_input: bool,
 }
 
-/// 执行后处理流水线，依次运行所有启用的节点。
-/// 每个节点的输出路径作为下一个节点的输入；若节点无输出（如 filter_short 删除文件），流水线终止。
+/// ，。
+/// ；（ filter_short ），。
 ///
 /// Execute the post-processing pipeline, running all enabled nodes in sequence.
 /// Each node's output path becomes the next node's input; if a node has no output
 /// (e.g., filter_short deletes the file), the pipeline terminates.
 ///
-/// # 参数 / Parameters
-/// - `video_path`: 初始输入视频路径 / Initial input video path
-/// - `pipeline`: 流水线配置 / Pipeline configuration
-/// - `modules`: 可用模块列表 / Available module list
-/// - `cancel`: 可选的取消标志 / Optional cancel flag
-/// - `max_tmp_dir_gb`: tmp 目录最大占用（GB，0 = 不限制）/ Max tmp dir size in GB (0 = unlimited)
-/// - `on_progress`: 进度回调（节点完成数, 总节点数, 模块内进度, 模块总进度, 模块名, 状态文字）/ Progress callback
-/// - `on_log`: 日志回调（模块 ID, 流名称, 行内容）/ Log callback
+/// Parameters
+/// Initial input video path
+/// Pipeline configuration
+/// Available module list
+/// Optional cancel flag
+/// - `max_tmp_dir_gb`: tmp （GB，0 = ）/ Max tmp dir size in GB (0 = unlimited)
+/// - `on_progress`: （, , , , , ）/ Progress callback
+/// - `on_log`: （ ID, , ）/ Log callback
 pub fn run_pipeline(
     video_path: &std::path::Path,
     pipeline: &PipelineConfig,
@@ -214,7 +214,7 @@ pub fn run_pipeline(
             continue;
         }
 
-        // 检查取消标志 / Check cancel flag
+        // Check cancel flag
         if cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
             break;
         }
@@ -222,7 +222,7 @@ pub fn run_pipeline(
         let module = match modules.iter().find(|m| m.id == node.module_id) {
             Some(m) => m,
             None => {
-                // 模块缺失，终止整条流水线 / Module missing, abort the entire pipeline
+                // Module missing, abort the entire pipeline
                 results.push(NodeResult {
                     node_id: node.node_id.clone(),
                     module_id: node.module_id.clone(),
@@ -266,7 +266,7 @@ pub fn run_pipeline(
         done += 1;
         on_progress(done, total, 0, 0, &module_name, "");
 
-        // 若模块请求删除其输入文件，由主程序执行删除（同时清理对应的 meta 文件）
+        // ，（ meta ）
         // If the module requested deletion of its input file, the host performs the deletion
         // (also cleaning up the corresponding meta file)
         if result.delete_input {
@@ -280,18 +280,18 @@ pub fn run_pipeline(
 
         match &result.output {
             Some(out) => {
-                // 节点有输出，继续执行下一个节点 / Node has output, continue to next node
+                // Node has output, continue to next node
                 current_input = out.clone();
                 results.push(result);
             }
             None if result.success => {
-                // 节点成功但无输出（模块已请求删除输入），终止流水线
+                // （），
                 // Node succeeded but has no output (module requested input deletion), terminate pipeline
                 results.push(result);
                 break;
             }
             None => {
-                // 节点失败，终止流水线 / Node failed, terminate pipeline
+                // Node failed, terminate pipeline
                 results.push(result);
                 break;
             }
@@ -301,18 +301,18 @@ pub fn run_pipeline(
     results
 }
 
-/// 执行单个流水线节点（启动子进程，读取 stdout/stderr，处理取消）。
+/// （， stdout/stderr，）。
 /// Execute a single pipeline node (spawn subprocess, read stdout/stderr, handle cancellation).
 ///
-/// # 参数 / Parameters
-/// - `module`: 模块信息（含可执行文件路径）/ Module info (including executable path)
-/// - `node`: 节点配置（含参数）/ Node configuration (including parameters)
-/// - `input`: 输入文件路径 / Input file path
-/// - `cancel`: 可选的取消标志 / Optional cancel flag
-/// - `max_tmp_dir_gb`: tmp 目录最大占用（GB，0 = 不限制）/ Max tmp dir size in GB (0 = unlimited)
-/// - `on_module_progress`: 模块内进度回调 / Module-level progress callback
-/// - `on_log`: 日志行回调 / Log line callback
-/// - `on_status`: 状态文字回调（来自 `STATUS:` 前缀行）/ Status text callback (from `STATUS:` prefix lines)
+/// Parameters
+/// - `module`: （）/ Module info (including executable path)
+/// - `node`: （）/ Node configuration (including parameters)
+/// Input file path
+/// Optional cancel flag
+/// - `max_tmp_dir_gb`: tmp （GB，0 = ）/ Max tmp dir size in GB (0 = unlimited)
+/// Module-level progress callback
+/// Log line callback
+/// - `on_status`: （ `STATUS:` ）/ Status text callback (from `STATUS:` prefix lines)
 #[allow(clippy::too_many_arguments)]
 fn run_node(
     module: &ModuleInfo,
@@ -329,7 +329,7 @@ fn run_node(
     use std::thread;
     use std::time::Duration;
 
-    /// 子进程输出流事件 / Subprocess output stream events
+    /// Subprocess output stream events
     enum StreamEvent {
         StdoutLine(String),
         StderrLine(String),
@@ -338,7 +338,7 @@ fn run_node(
     }
 
     let mut cmd = std::process::Command::new(&module.exe_path);
-    // PP_MAX_TMP_MB 以 MB 为单位传给模块（GB * 1024，向下取整）
+    // PP_MAX_TMP_MB  MB （GB * 1024，）
     // Pass PP_MAX_TMP_MB to the module in MB (GB * 1024, truncated)
     let max_tmp_mb = (max_tmp_dir_gb * 1024.0) as u64;
     cmd.env("PP_INPUT", input)
@@ -347,7 +347,7 @@ fn run_node(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    // 将节点参数转换为 PP_PARAM_{KEY} 环境变量 / Convert node params to PP_PARAM_{KEY} env vars
+    // Convert node params to PP_PARAM_{KEY} env vars
     for (key, val) in &node.params {
         let env_key = format!("PP_PARAM_{}", key.to_uppercase());
         let env_val = match val {
@@ -380,7 +380,7 @@ fn run_node(
 
     let module_id = &node.module_id;
 
-    // 使用 channel 将 stdout/stderr 的行事件汇聚到主循环
+    // channel  stdout/stderr
     // Use a channel to funnel stdout/stderr line events into the main loop
     let (tx, rx) = mpsc::channel::<StreamEvent>();
     let mut stdout_done = true;
@@ -415,9 +415,9 @@ fn run_node(
     drop(tx);
 
     while !(stdout_done && stderr_done) {
-        // 每 100ms 检查一次取消标志 / Check cancel flag every 100ms
+        // Check cancel flag every 100ms
         if cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
-            // Windows 上使用 taskkill 强制终止进程树 / Use taskkill on Windows to force-kill the process tree
+            // Use taskkill on Windows to force-kill the process tree
             #[cfg(target_os = "windows")]
             {
                 let pid = child.id();
@@ -436,7 +436,7 @@ fn run_node(
             Ok(StreamEvent::StdoutLine(line)) => {
                 let trimmed = line.trim();
                 if let Some(rest) = trimmed.strip_prefix("PROGRESS:") {
-                    // 解析 PROGRESS:{done}/{total} 格式 / Parse PROGRESS:{done}/{total} format
+                    // Parse PROGRESS:{done}/{total} format
                     let mut parts = rest.splitn(2, '/');
                     if let (Some(d), Some(t)) = (parts.next(), parts.next())
                         && let (Ok(done), Ok(total)) =
@@ -445,14 +445,14 @@ fn run_node(
                         on_module_progress(done, total);
                     }
                 } else if let Some(status_text) = trimmed.strip_prefix("STATUS:") {
-                    // 解析 STATUS:{text} 格式（上传速度等）/ Parse STATUS:{text} format (upload speed, etc.)
+                    // STATUS:{text} （）/ Parse STATUS:{text} format (upload speed, etc.)
                     on_log("status", status_text.trim());
                     on_status(status_text.trim());
                 } else if let Some(path) = trimmed.strip_prefix("OUTPUT:") {
-                    // 解析 OUTPUT:{path} 格式 / Parse OUTPUT:{path} format
+                    // Parse OUTPUT:{path} format
                     output_path = Some(PathBuf::from(path.trim()));
                 } else if trimmed == "DELETE_INPUT" {
-                    // 模块请求主程序删除其输入文件 / Module requests host to delete its input file
+                    // Module requests host to delete its input file
                     delete_input = true;
                 } else if !trimmed.is_empty() {
                     tracing::info!("[{}] {}", module_id, trimmed);
@@ -465,7 +465,7 @@ fn run_node(
                 if trimmed.is_empty() {
                     continue;
                 }
-                // 过滤 Rust panic 的 BACKTRACE 提示行 / Filter Rust panic BACKTRACE hint lines
+                // Filter Rust panic BACKTRACE hint lines
                 if trimmed.starts_with("note: run with `RUST_BACKTRACE") {
                     continue;
                 }
@@ -502,7 +502,7 @@ fn run_node(
         };
     }
 
-    // panic 消息优先于普通 stderr 消息 / Panic message takes priority over regular stderr message
+    // Panic message takes priority over regular stderr message
     if !panic_msg.is_empty() {
         stderr_msg = panic_msg;
     }

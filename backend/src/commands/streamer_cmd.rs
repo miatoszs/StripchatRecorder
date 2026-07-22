@@ -1,6 +1,6 @@
-//! 主播管理命令 / Streamer Management Commands
+//! Streamer Management Commands
 //!
-//! 提供主播列表查询、添加/移除主播、设置自动录制、手动开始/停止录制等功能。
+//! 、/、、/。
 //! Provides streamer list queries, add/remove streamers, auto-record toggle, and manual recording control.
 //! These functions are called directly by the HTTP server handlers in server_mod/server.rs.
 
@@ -11,25 +11,25 @@ use crate::config::settings::AppState;
 use crate::streaming::stripchat::StripchatApi;
 use std::sync::Arc;
 
-/// 主播条目（序列化后返回给前端）/ Streamer entry (serialized and returned to the frontend)
+/// （）/ Streamer entry (serialized and returned to the frontend)
 #[derive(serde::Serialize)]
 pub struct StreamerEntry {
     pub username: String,
     pub auto_record: bool,
     pub added_at: String,
-    /// 是否在线 / Whether online
+    /// Whether online
     pub is_online: bool,
-    /// 是否正在录制 / Whether currently recording
+    /// Whether currently recording
     pub is_recording: bool,
-    /// 是否可录制（直播间公开可访问）/ Whether recordable (stream publicly accessible)
+    /// （）/ Whether recordable (stream publicly accessible)
     pub is_recordable: bool,
     pub viewers: i64,
-    /// 直播间状态文字 / Stream status text
+    /// Stream status text
     pub status: String,
     pub thumbnail_url: Option<String>,
 }
 
-/// 列出所有追踪主播及其当前状态。
+/// 。
 /// List all tracked streamers with their current status.
 pub async fn list_streamers(
     state: &Arc<AppState>,
@@ -60,7 +60,7 @@ pub async fn list_streamers(
         .collect())
 }
 
-/// 添加新主播到追踪列表。
+/// 。
 /// Add a new streamer to the tracking list.
 pub async fn add_streamer(
     username: String,
@@ -85,7 +85,7 @@ pub async fn add_streamer(
     Ok(())
 }
 
-/// 从追踪列表中移除主播，同时停止录制并删除录制文件目录。
+/// ，。
 /// Remove a streamer from the tracking list, stopping any recording and deleting the recording directory.
 pub async fn remove_streamer(
     username: String,
@@ -104,7 +104,7 @@ pub async fn remove_streamer(
     Ok(())
 }
 
-/// 设置指定主播的自动录制开关。
+/// 。
 /// Set the auto-record toggle for a specific streamer.
 pub async fn set_auto_record(
     username: String,
@@ -115,7 +115,7 @@ pub async fn set_auto_record(
     Ok(())
 }
 
-/// 手动开始录制指定主播。
+/// 。
 /// Manually start recording a specific streamer.
 pub async fn start_recording(
     username: String,
@@ -144,7 +144,7 @@ pub async fn start_recording(
         .await
 }
 
-/// 手动停止录制指定主播。
+/// 。
 /// Manually stop recording a specific streamer.
 pub async fn stop_recording(
     username: String,
@@ -156,7 +156,7 @@ pub async fn stop_recording(
     Ok(())
 }
 
-/// 验证主播用户名是否存在于 Stripchat。
+/// Stripchat。
 /// Verify whether a streamer username exists on Stripchat.
 pub async fn verify_streamer(
     username: String,

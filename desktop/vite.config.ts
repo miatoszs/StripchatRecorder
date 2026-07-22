@@ -15,7 +15,7 @@ export default defineConfig({
     },
   },
 
-  // Tauri 要求构建产物输出到 dist/，相对于 tauri.conf.json 中配置的 frontendDist
+  // Tauri  dist/， tauri.conf.json  frontendDist
   // Tauri requires build output to dist/, relative to frontendDist in tauri.conf.json
   build: {
     outDir: "dist",
@@ -34,7 +34,7 @@ export default defineConfig({
     },
   },
 
-  // Tauri 开发服务器配置 / Tauri dev server config
+  // Tauri dev server config
   server: {
     port: 1420,
     strictPort: true,

@@ -1,9 +1,9 @@
 /**
- * 录制文件管理 Composable / Recording File Management Composable
+ * Recording File Management Composable
  *
- * 管理录制文件列表的加载、分组、排序、选择和计时功能。
- * 文件按主播用户名分组，支持多列排序，并为正在录制的文件提供实时计时器。
- * 所有状态（录制中/合并中/后处理等）均来自后端 meta 文件的 `status` 字段。
+ * 、、、。
+ * ，，。
+ * （//） meta  `status` 。
  *
  * Manages loading, grouping, sorting, selection, and timing of recording files.
  * Files are grouped by streamer username, support multi-column sorting,
@@ -16,24 +16,24 @@ import { call } from "@/lib/api";
 import type { RecordingFile } from "@/types/recordings";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "@lucide/vue";
 
-/** 支持的排序字段 / Supported sort keys */
+/*Supported sort keys */
 export type SortKey = "started_at" | "size_bytes" | "video_duration_secs";
-/** 排序方向 / Sort direction */
+/*Sort direction */
 export type SortDir = "asc" | "desc";
 
-/** 按主播分组的录制文件组 / Recording file group by streamer */
+/*Recording file group by streamer */
 export interface Group {
 	username: string;
 	files: RecordingFile[];
-	/** 组内所有文件的总大小（字节）/ Total size of all files in the group (bytes) */
+	/** （）/ Total size of all files in the group (bytes) */
 	totalSize: number;
-	/** 组内是否有正在录制的文件 / Whether any file in the group is currently recording */
+	/*Whether any file in the group is currently recording */
 	hasRecording: boolean;
 }
 
 /**
- * 从录制文件名中提取主播用户名。
- * 文件名格式为 `{username}_{YYYYMMDD}_{HHmmss}.ext`。
+ * 。
+ * `{username}_{YYYYMMDD}_{HHmmss}.ext`。
  *
  * Extract the streamer username from a recording filename.
  * Filename format: `{username}_{YYYYMMDD}_{HHmmss}.ext`
@@ -45,27 +45,27 @@ export function usernameFromFile(f: RecordingFile): string {
 }
 
 /**
- * 录制文件列表状态与操作。
+ * 。
  */
 export function useRecordings() {
-	/** 所有录制文件列表 / All recording files */
+	/*All recording files */
 	const files = ref<RecordingFile[]>([]);
-	/** 是否正在加载 / Whether loading */
+	/*Whether loading */
 	const loading = ref(false);
-	/** 各文件的已录制时长（秒，实时递增）/ Elapsed recording duration per file (seconds, increments in real-time) */
+	/** （，）/ Elapsed recording duration per file (seconds, increments in real-time) */
 	const elapsed = ref<Record<string, number>>({});
-	/** 已选中的文件路径集合 / Set of selected file paths */
+	/*Set of selected file paths */
 	const selected = ref<Set<string>>(new Set());
-	/** 已折叠的分组用户名集合 / Set of collapsed group usernames */
+	/*Set of collapsed group usernames */
 	const collapsedGroups = ref<Set<string>>(new Set());
-	/** 当前排序字段 / Current sort key */
+	/*Current sort key */
 	const sortKey = ref<SortKey>("started_at");
-	/** 当前排序方向 / Current sort direction */
+	/*Current sort direction */
 	const sortDir = ref<SortDir>("desc");
 
-	/** 计时器句柄：每秒递增录制时长 / Timer handle: increments recording duration every second */
+	/*Timer handle: increments recording duration every second */
 	let tickTimer: ReturnType<typeof setInterval> | null = null;
-	/** 计时器句柄：防抖刷新文件列表 / Timer handle: debounced file list refresh */
+	/*Timer handle: debounced file list refresh */
 	let dirRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function toggleSort(key: SortKey) {
@@ -83,8 +83,8 @@ export function useRecordings() {
 	}
 
 	/**
-	 * 按主播分组的文件列表（计算属性）。
-	 * 直接按文件名提取用户名分组，无需额外的合并状态过滤。
+	 * （）。
+	 * ，。
 	 *
 	 * Files grouped by streamer (computed property).
 	 * Groups directly by username extracted from filename, no merging state filtering needed.
@@ -193,7 +193,7 @@ export function useRecordings() {
 	}
 
 	/**
-	 * 从后端加载录制文件列表，并重建计时器状态。
+	 * ，。
 	 * Load recording file list from backend and rebuild timer state.
 	 */
 	async function load() {

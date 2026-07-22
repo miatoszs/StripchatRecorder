@@ -50,7 +50,7 @@
 
 	const copied = ref(false);
 
-	// 转发流地址 / Stream relay URL
+	// Stream relay URL
 	const streamUrl = computed(
 		() => `${window.location.origin}/stream/${props.streamer.username}`,
 	);

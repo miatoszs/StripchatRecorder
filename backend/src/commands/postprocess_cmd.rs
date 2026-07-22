@@ -1,6 +1,6 @@
-//! 后处理流水线命令 / Post-processing Pipeline Commands
+//! Post-processing Pipeline Commands
 //!
-//! 提供模块发现、流水线配置读写、后处理任务触发/取消、进度查询和模块输出路径查询等功能。
+//! 、、/、。
 //! Provides module discovery, pipeline config read/write,
 //! post-processing task triggering/cancellation, progress queries, and module output path queries.
 
@@ -9,8 +9,8 @@ use crate::postprocess::pipeline::{discover_modules, run_pipeline, NodeResult, P
 use crate::config::settings::AppState;
 use std::sync::Arc;
 
-/// 公开的后处理入口（供录制完成后自动触发使用）。
-/// 将任务加入等待队列后调用内部实现。
+/// （）。
+/// 。
 ///
 /// Public post-processing entry point (used for automatic triggering after recording completes).
 /// Enqueues the task and then calls the inner implementation.
@@ -28,14 +28,14 @@ pub fn run_postprocess_for_path(
         &serde_json::json!({ "path": path_str }),
     );
 
-    // 更新元数据文件中的后处理状态 / Update post-processing status in metadata file
+    // Update post-processing status in metadata file
     crate::recording::meta::set_status(video_path, "pp_waiting");
 
     run_postprocess_for_path_inner(video_path, pipeline, emitter, state);
 }
 
-/// 后处理流水线执行的核心实现（同步，在阻塞线程中调用）。
-/// 获取串行锁 → 检查取消标志 → 执行流水线 → 上报进度和结果。
+/// （，）。
+/// →  →  → 。
 ///
 /// Core implementation of post-processing pipeline execution (synchronous, called in a blocking thread).
 /// Acquires serial lock → checks cancel flag → runs pipeline → reports progress and results.
@@ -47,11 +47,11 @@ pub fn run_postprocess_for_path_inner(
 ) {
     let path_str = video_path.to_string_lossy().to_string();
 
-    // 获取串行锁，确保同一时刻只有一个后处理任务运行
+    // ，
     // Acquire serial lock to ensure only one post-processing task runs at a time
     let _pp_guard = state.pp_lock.lock().unwrap_or_else(|e| e.into_inner());
 
-    // 检查是否在等待锁期间已被取消 / Check if cancelled while waiting for the lock
+    // Check if cancelled while waiting for the lock
     let already_cancelled = state
         .pp_cancel_flags
         .read()
@@ -66,7 +66,7 @@ pub fn run_postprocess_for_path_inner(
 
     let modules = discover_modules();
 
-    // 从 meta 读取上次的后处理结果，用于跳过已成功的模块（重新后处理时复用）
+    // meta ，（）
     // Read previous pp_results from meta to skip already-succeeded modules on re-run
     let meta_snapshot = crate::recording::meta::read_meta(video_path);
     tracing::info!(
@@ -84,7 +84,7 @@ pub fn run_postprocess_for_path_inner(
         prev_results.iter().map(|r| format!("{}={}", r.module_id, r.success)).collect::<Vec<_>>()
     );
 
-    // 构建实际需要执行的节点列表：跳过上次已成功的模块
+    // ：
     // Build the list of nodes to actually run: skip modules that succeeded last time
     let effective_pipeline = {
         let mut p = pipeline.clone();
@@ -99,7 +99,7 @@ pub fn run_postprocess_for_path_inner(
         p
     };
 
-    // 预检：确认所有启用节点的模块都存在，缺失则直接报错
+    // ：，
     // Pre-check: verify all enabled nodes have their modules available, fail fast if not
     let missing: Vec<&str> = effective_pipeline
         .nodes
@@ -137,7 +137,7 @@ pub fn run_postprocess_for_path_inner(
         &serde_json::json!({ "path": path_str }),
     );
 
-    // 更新元数据文件：标记为运行中 / Update metadata file: mark as running
+    // Update metadata file: mark as running
     crate::recording::meta::set_status(video_path, "pp_running");
 
     let max_tmp_dir_gb = state.get_settings().max_tmp_dir_gb;
@@ -148,7 +148,7 @@ pub fn run_postprocess_for_path_inner(
         &modules,
         Some(cancel_flag),
         max_tmp_dir_gb,
-        // 进度回调：更新状态并向前端发送进度事件
+        // ：
         // Progress callback: update state and emit progress event to frontend
         |node_done: usize, node_total: usize, mod_done: u32, mod_total: u32, module_name: &str, status_text: &str| {
             let pct_raw = if node_total == 0 {
@@ -194,7 +194,7 @@ pub fn run_postprocess_for_path_inner(
                 }),
             );
         },
-        // 日志回调：将模块的 stdout/stderr 输出转发给前端
+        // ： stdout/stderr
         // Log callback: forward module stdout/stderr output to the frontend
         |module_id, stream, line| {
             emitter.emit(
@@ -211,7 +211,7 @@ pub fn run_postprocess_for_path_inner(
 
     state.pp_task_clear_cancel_flag(&path_str);
 
-    // 合并本次结果与上次已成功的结果，按原始 pipeline 节点顺序排列
+    // ， pipeline
     // Merge new results with previously succeeded results, ordered by original pipeline node order
     let results: Vec<NodeResult> = {
         let mut merged: Vec<NodeResult> = Vec::new();
