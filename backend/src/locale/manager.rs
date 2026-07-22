@@ -12,20 +12,20 @@
 //! <exe_dir>/
 //! └── locale/
 //!     ├── app/
-//!     │   ├── zh-CN.json      # 主程序中文翻译
+//!     │   ├── en-US.json      # 主程序中文翻译
 //!     │   └── en-US.json      # 主程序英文翻译
 //!     └── modules/
 //!         ├── filter_short/
-//!         │   ├── zh-CN.json
+//!         │   ├── en-US.json
 //!         │   └── en-US.json
 //!         ├── contact_sheet/
-//!         │   ├── zh-CN.json
+//!         │   ├── en-US.json
 //!         │   └── en-US.json
 //!         ├── notify_discord/
-//!         │   ├── zh-CN.json
+//!         │   ├── en-US.json
 //!         │   └── en-US.json
 //!         └── notify_telegram/
-//!             ├── zh-CN.json
+//!             ├── en-US.json
 //!             └── en-US.json
 //! ```
 
@@ -56,10 +56,6 @@ pub fn module_locale_dir(module_id: &str) -> PathBuf {
     modules_locale_dir().join(module_id)
 }
 
-/// 默认的主程序中文翻译 JSON。
-/// Default app Chinese (zh-CN) translation JSON.
-const APP_ZH_CN: &str = include_str!("defaults/app/zh-CN.json");
-
 /// 默认的主程序英文翻译 JSON。
 /// Default app English (en-US) translation JSON.
 const APP_EN_US: &str = include_str!("defaults/app/en-US.json");
@@ -69,18 +65,8 @@ const APP_EN_US: &str = include_str!("defaults/app/en-US.json");
 const MODULE_DEFAULTS: &[(&str, &str, &str)] = &[
     (
         "filter_short",
-        "zh-CN",
-        include_str!("defaults/modules/filter_short/zh-CN.json"),
-    ),
-    (
-        "filter_short",
         "en-US",
         include_str!("defaults/modules/filter_short/en-US.json"),
-    ),
-    (
-        "contact_sheet",
-        "zh-CN",
-        include_str!("defaults/modules/contact_sheet/zh-CN.json"),
     ),
     (
         "contact_sheet",
@@ -89,18 +75,8 @@ const MODULE_DEFAULTS: &[(&str, &str, &str)] = &[
     ),
     (
         "notify_discord",
-        "zh-CN",
-        include_str!("defaults/modules/notify_discord/zh-CN.json"),
-    ),
-    (
-        "notify_discord",
         "en-US",
         include_str!("defaults/modules/notify_discord/en-US.json"),
-    ),
-    (
-        "notify_telegram",
-        "zh-CN",
-        include_str!("defaults/modules/notify_telegram/zh-CN.json"),
     ),
     (
         "notify_telegram",
@@ -129,7 +105,7 @@ pub fn init_locale_dirs() {
 
     // 主程序内置语言文件：不存在则创建，存在但校验失败则重建
     // Built-in app locale files: create if missing, rebuild if validation fails
-    for (locale_code, default_content) in [("zh-CN", APP_ZH_CN), ("en-US", APP_EN_US)] {
+    for (locale_code, default_content) in [("en-US", APP_EN_US)] {
         let path = app_dir.join(format!("{}.json", locale_code));
         write_or_rebuild_if_invalid(
             &path,
@@ -298,10 +274,10 @@ fn validate_file_at_path(
             let code = path
                 .file_stem()
                 .and_then(|s| s.to_str())
-                .unwrap_or("zh-CN");
+                .unwrap_or("en-US");
             let default_content = match code {
                 "en-US" => APP_EN_US,
-                _ => APP_ZH_CN,
+                _ => APP_EN_US,
             };
             validate_app_locale(&value, default_content)
         }
@@ -309,7 +285,7 @@ fn validate_file_at_path(
 }
 
 /// 扫描所有用户自定义语言文件（不在内置列表中的文件）并返回校验失败的项。
-/// 内置文件（zh-CN / en-US 及四个内置模块的语言文件）由 `init_locale_dirs` 在启动时处理。
+/// 内置文件（en-US / en-US 及四个内置模块的语言文件）由 `init_locale_dirs` 在启动时处理。
 ///
 /// Scan all user-defined locale files (not in the built-in list) and return validation failures.
 /// Built-in files are handled by `init_locale_dirs` at startup.
@@ -319,7 +295,7 @@ pub fn check_custom_locale_files() -> Vec<(String, String)> {
     let mut warnings: Vec<(String, String)> = Vec::new();
 
     // 检查 app 自定义语言文件 / Check custom app locale files
-    let builtin_app_codes: &[&str] = &["zh-CN", "en-US"];
+    let builtin_app_codes: &[&str] = &["en-US", "en-US"];
     if let Ok(dir) = std::fs::read_dir(app_locale_dir()) {
         for entry in dir.flatten() {
             let path = entry.path();
@@ -346,7 +322,7 @@ pub fn check_custom_locale_files() -> Vec<(String, String)> {
         "notify_discord",
         "notify_telegram",
     ];
-    let builtin_locale_codes: &[&str] = &["zh-CN", "en-US"];
+    let builtin_locale_codes: &[&str] = &["en-US", "en-US"];
     if let Ok(mod_dir) = std::fs::read_dir(modules_locale_dir()) {
         for module_entry in mod_dir.flatten() {
             let module_path = module_entry.path();
@@ -407,7 +383,7 @@ pub fn read_app_locale(locale_code: &str) -> serde_json::Value {
         // 内置 fallback / Embedded fallback
         let content = match locale_code {
             "en-US" => APP_EN_US,
-            _ => APP_ZH_CN,
+            _ => APP_EN_US,
         };
         serde_json::from_str(content).unwrap_or(serde_json::Value::Object(Default::default()))
     })
@@ -512,10 +488,10 @@ pub struct LocaleEntry {
 }
 
 /// 扫描 locale/app/ 目录，返回所有可用语言列表。
-/// 始终包含内置的 zh-CN 和 en-US（即使文件尚未创建）。
+/// 始终包含内置的 en-US 和 en-US（即使文件尚未创建）。
 ///
 /// Scan the locale/app/ directory and return all available locales.
-/// Always includes built-in zh-CN and en-US (even if files don't exist yet).
+/// Always includes built-in en-US and en-US (even if files don't exist yet).
 pub fn list_available_locales() -> Vec<LocaleEntry> {
     let mut entries: Vec<LocaleEntry> = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -544,8 +520,8 @@ pub fn list_available_locales() -> Vec<LocaleEntry> {
         }
     }
 
-    // 补充内置语言（若磁盘上没有）/ Add built-in locales if not already present
-    for (code, content) in [("zh-CN", APP_ZH_CN), ("en-US", APP_EN_US)] {
+    // 补充内置语言（若磁盘上没有）/ Add built-in locales if not already    // Use en-US for all
+    for (code, content) in [("en-US", APP_EN_US)] {
         if !seen.contains(code) {
             let name = serde_json::from_str::<serde_json::Value>(content)
                 .ok()

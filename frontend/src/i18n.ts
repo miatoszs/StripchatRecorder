@@ -3,25 +3,26 @@
  *
  * 语言数据加载优先级：
  * 1. 从后端 /api/locale/{code} 加载（读取 <exe_dir>/locale/app/{code}.json），允许用户自定义覆盖
- * 2. 内置 TS 翻译（zh-CN / en-US）作为初始消息和 fallback，确保首屏不闪烁
+ * 2. 内置 TS 翻译（en-US / en-US）作为初始消息和 fallback，确保首屏不闪烁
  *
  * 可用语言列表通过 /api/locales 动态获取，无需修改前端代码即可支持新语言。
  *
  * Locale data loading priority:
  * 1. Load from backend /api/locale/{code}, allowing user customization
- * 2. Built-in TS translations (zh-CN / en-US) as initial messages and fallback
+ * 2. Built-in TS translations (en-US / en-US) as initial messages and fallback
  *
  * Available locale list is fetched dynamically from /api/locales —
  * adding a new language requires no frontend code changes.
  */
 
 import { createI18n } from "vue-i18n";
-import zhCN from "./locales/zh-CN";
 import enUS from "./locales/en-US";
 
-export type MessageSchema = typeof zhCN;
+export type MessageSchema = typeof enUS;
 
-const savedLocale = "zh-CN"; // 初始值，启动后由 App.vue 从后端 settings 同步覆盖
+const savedLocale = "en-US"; // 初始值，启动后由 App.vue 从后端 settings 同步覆盖
+const storedLang = localStorage.getItem("lang");
+const lang = storedLang || savedLocale;
 
 /** 可用语言条目（从 /api/locales 获取）/ Available locale entry (from /api/locales) */
 export interface LocaleEntry {
@@ -50,7 +51,6 @@ export async function fetchAvailableLocales(): Promise<LocaleEntry[]> {
 /** 内置 fallback 语言列表（后端不可用时使用）/ Built-in fallback locale list */
 function builtinLocales(): LocaleEntry[] {
 	return [
-		{ code: "zh-CN", name: "简体中文" },
 		{ code: "en-US", name: "English" },
 	];
 }
@@ -90,10 +90,10 @@ export async function loadLocaleFromServer(
 		if (data.app && typeof data.app === "object") {
 			// 若 vue-i18n 尚未注册该语言则先用空对象注册，再合并
 			// Register with empty object first if locale not yet known, then merge
-			if (!i18n.global.availableLocales.includes(localeCode as never)) {
-				i18n.global.setLocaleMessage(localeCode as never, data.app);
+			if (!(i18n.global.availableLocales as string[]).includes(localeCode)) {
+				i18n.global.setLocaleMessage(localeCode as any, data.app);
 			} else {
-				i18n.global.mergeLocaleMessage(localeCode as never, data.app);
+				i18n.global.mergeLocaleMessage(localeCode as any, data.app);
 			}
 		}
 
@@ -106,17 +106,15 @@ export async function loadLocaleFromServer(
 	}
 }
 
-// vue-i18n 实例：用宽泛的 string 类型避免硬编码语言列表，
-// 内置 zh-CN / en-US 作为初始消息确保首屏无闪烁。
-//
-// vue-i18n instance: use loose string type to avoid hardcoding locale list.
-// Built-in zh-CN / en-US provide initial messages to prevent first-frame flash.
-const i18n = createI18n<false>({
-	legacy: false,
-	locale: savedLocale,
-	fallbackLocale: "zh-CN",
+export const i18n = createI18n({
+	legacy: false, // 必须为 false 才能使用 Composition API
+	locale: lang,
+	// 内置 en-US 作为初始消息确保首屏无闪烁。
+	// 后续 fetch 后端会合并完整 JSON 到对应的 locale 中。
+	// Built-in en-US provide initial messages to prevent first-frame flash.
+	// Later backend fetches will merge full JSON into the corresponding locale.
+	fallbackLocale: "en-US",
 	messages: {
-		"zh-CN": zhCN,
 		"en-US": enUS,
 	},
 });

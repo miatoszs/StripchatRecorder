@@ -83,7 +83,7 @@ pub struct Settings {
     /// Max size of the post-processing tmp directory in GB (0 = unlimited, default 50 GB)
     #[serde(default = "default_max_tmp_dir_gb")]
     pub max_tmp_dir_gb: f64,
-    /// 界面语言（"zh-CN" 或 "en-US"）/ UI language ("zh-CN" or "en-US")
+    /// 界面语言（"en-US" 或 "en-US"）/ UI language ("en-US" or "en-US")
     #[serde(default = "default_language")]
     pub language: String,
     /// 监听端口 / Listen port
@@ -120,7 +120,7 @@ fn default_max_tmp_dir_gb() -> f64 {
 
 /// 语言的默认值 / Default value for language
 fn default_language() -> String {
-    "zh-CN".to_string()
+    "en-US".to_string()
 }
 
 /// Server 端口的默认值 / Default value for server port

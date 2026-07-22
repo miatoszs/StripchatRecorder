@@ -79,7 +79,7 @@
 		max_concurrent: 0,
 		merge_format: "mp4",
 		max_tmp_dir_gb: 50,
-		language: "zh-CN",
+		language: "en-US",
 		mouflon_sync_url: null,
 		mouflon_sync_token: null,
 		setup_done: true,

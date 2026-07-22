@@ -11,6 +11,7 @@
 //! - Parsing Mouflon-encrypted playlists
 
 use crate::core::error::{AppError, Result};
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE};
 use reqwest::{Client, Response};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -28,11 +29,26 @@ const CDN_TLDS: &[&str] = &[
     "doppiocdn.net",
 ];
 
+fn get_default_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(ACCEPT, HeaderValue::from_static("application/json, text/plain, */*"));
+    headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
+    headers.insert("Sec-Ch-Ua", HeaderValue::from_static("\"Not A(Brand\";v=\"8\", \"Chromium\";v=\"136\", \"Google Chrome\";v=\"136\""));
+    headers.insert("Sec-Ch-Ua-Mobile", HeaderValue::from_static("?0"));
+    headers.insert("Sec-Ch-Ua-Platform", HeaderValue::from_static("\"Windows\""));
+    headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("empty"));
+    headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("cors"));
+    headers.insert("Sec-Fetch-Site", HeaderValue::from_static("same-origin"));
+    headers
+}
+
 /// 构建用于 CDN 分片下载的 HTTP 客户端（支持代理，启用 TCP keepalive）。
 /// Build an HTTP client for CDN segment downloads (supports proxy, enables TCP keepalive).
 fn build_client(proxy_url: Option<&str>) -> Result<Client> {
     let mut builder = Client::builder()
         .user_agent(USER_AGENT)
+        .default_headers(get_default_headers())
+        .http1_only() // Force HTTP/1.1 to avoid Cloudflare HTTP/2 connection resets
         .timeout(std::time::Duration::from_secs(30))
         .tcp_keepalive(std::time::Duration::from_secs(15))
         .connection_verbose(false);
@@ -53,6 +69,8 @@ fn build_client(proxy_url: Option<&str>) -> Result<Client> {
 fn build_api_client(proxy_url: Option<&str>) -> Result<Client> {
     let mut builder = Client::builder()
         .user_agent(USER_AGENT)
+        .default_headers(get_default_headers())
+        .http1_only() // Force HTTP/1.1 to avoid Cloudflare HTTP/2 connection resets
         .timeout(std::time::Duration::from_secs(30));
 
     if let Some(proxy) = proxy_url
@@ -303,10 +321,14 @@ impl StripchatApi {
 
         if !resp.status().is_success() {
             if resp.status() == reqwest::StatusCode::NOT_FOUND {
-                return Err(AppError::UserNotFound(format!("用户 {} 不存在", username)));
+                return Err(AppError::UserNotFound(format!("User {} not found", username)));
+            }
+            if resp.status() == reqwest::StatusCode::FORBIDDEN {
+                tracing::warn!("API returned 403 for {}, falling back to HTML page fetch...", username);
+                return self.get_stream_info_from_html(username, fetch_playlist).await;
             }
             return Err(AppError::Other(format!(
-                "API 返回 {} ({})",
+                "API returned {} ({})",
                 resp.status().as_u16(),
                 username
             )));
@@ -327,17 +349,17 @@ impl StripchatApi {
         };
 
         let status = match status_text {
-            "public" => "公开秀".to_string(),
-            "private" => "私密秀".to_string(),
+            "public" => "Public".to_string(),
+            "private" => "Private".to_string(),
             "groupShow" => match group_show_type.as_deref() {
-                Some("ticket") => "票务秀".to_string(),
-                Some("perMinute") => "计时秀".to_string(),
-                _ => "群组秀".to_string(),
+                Some("ticket") => "Ticket show".to_string(),
+                Some("perMinute") => "Per minute".to_string(),
+                _ => "Group show".to_string(),
             },
-            "virtualPrivate" => "虚拟私密".to_string(),
+            "virtualPrivate" => "Virtual private".to_string(),
             "p2p" => "P2P".to_string(),
-            "idle" => "等待".to_string(),
-            "off" => "离线".to_string(),
+            "idle" => "Idle".to_string(),
+            "off" => "Offline".to_string(),
             _ => status_text.to_string(),
         };
 
@@ -374,6 +396,113 @@ impl StripchatApi {
             is_online: is_live,
             is_recordable,
             viewers,
+            status,
+            thumbnail_url,
+            playlist_url,
+        })
+    }
+
+    /// 从 HTML 页面解析主播直播状态（用于 API 返回 403 Forbidden 时的 fallback 绕过）。
+    /// Parse streamer live status from HTML page (used as a fallback bypass when API returns 403 Forbidden).
+    async fn get_stream_info_from_html(
+        &self,
+        username: &str,
+        fetch_playlist: bool,
+    ) -> Result<StreamInfo> {
+        let page_url = self.api_url(&format!("https://stripchat.com/{}", username));
+
+        let resp = self
+            .api_client
+            .get(&page_url)
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            if resp.status() == reqwest::StatusCode::NOT_FOUND {
+                return Err(AppError::UserNotFound(format!("User {} not found", username)));
+            }
+            return Err(AppError::Other(format!(
+                "HTML page returned {} ({})",
+                resp.status().as_u16(),
+                username
+            )));
+        }
+
+        let html = resp.text().await?;
+
+        let is_live = regex::Regex::new(r#""isLive"\s*:\s*(true|false)"#)
+            .ok()
+            .and_then(|re| re.captures(&html))
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str() == "true")
+            .unwrap_or(false);
+
+        let status_text = regex::Regex::new(r#""status"\s*:\s*"([^"]+)""#)
+            .ok()
+            .and_then(|re| re.captures(&html))
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let model_id = regex::Regex::new(r#""id"\s*:\s*(\d+)"#)
+            .ok()
+            .and_then(|re| re.captures(&html))
+            .and_then(|cap| cap.get(1))
+            .and_then(|m| m.as_str().parse::<i64>().ok());
+
+        let snapshot_ts = regex::Regex::new(r#""snapshotTimestamp"\s*:\s*(\d+)"#)
+            .ok()
+            .and_then(|re| re.captures(&html))
+            .and_then(|cap| cap.get(1))
+            .and_then(|m| m.as_str().parse::<i64>().ok())
+            .unwrap_or(0);
+
+        let stream_name = regex::Regex::new(r#""streamName"\s*:\s*"([^"]+)""#)
+            .ok()
+            .and_then(|re| re.captures(&html))
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string());
+
+        let status = match status_text.as_str() {
+            "public" => "Public".to_string(),
+            "private" => "Private".to_string(),
+            "groupShow" => "Group show".to_string(),
+            "virtualPrivate" => "Virtual private".to_string(),
+            "p2p" => "P2P".to_string(),
+            "idle" => "Idle".to_string(),
+            "off" => "Offline".to_string(),
+            _ => status_text.to_string(),
+        };
+
+        let thumbnail_url = if is_live && snapshot_ts > 0 && stream_name.is_some() {
+            Some(format!(
+                "https://img.doppiocdn.net/thumbs/{}/{}",
+                snapshot_ts,
+                stream_name.as_ref().unwrap()
+            ))
+        } else {
+            None
+        };
+
+        let is_recordable = is_live && status_text == "public";
+        let playlist_url = if is_recordable && fetch_playlist && let Some(mid) = model_id {
+            let json_stub = serde_json::json!({
+                "user": {
+                    "user": {
+                        "id": mid
+                    }
+                }
+            });
+            self.get_playlist_url(username, &json_stub).await.ok()
+        } else {
+            None
+        };
+
+        Ok(StreamInfo {
+            is_online: is_live,
+            is_recordable,
+            viewers: 0,
             status,
             thumbnail_url,
             playlist_url,

@@ -233,7 +233,7 @@ function probabilityLabel(code: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("zh-CN", {
+  return new Date(iso).toLocaleDateString("en-US", {
     year: "numeric", month: "2-digit", day: "2-digit",
   });
 }
