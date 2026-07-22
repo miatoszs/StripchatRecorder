@@ -1,6 +1,6 @@
 services:
   stripchat-recorder:
-    image: chantrail/stripchat-recorder:latest
+    image: miatoszs/stripchat-recorder:latest
     container_name: stripchat-recorder
     restart: unless-stopped
     environment:

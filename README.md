@@ -1,11 +1,7 @@
 # StripchatRecorder
 
-[简体中文](README.md) | [English](README.en.md)
-
-A self-hosted Stripchat live stream recorder with a web-based management UI. Supports automatic recording, post-processing pipelines, and multi-channel notifications.
-
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-3.0.html)
-[![Docker Image](https://img.shields.io/docker/pulls/chantrail/stripchat-recorder)](https://hub.docker.com/r/chantrail/stripchat-recorder)
+[![Docker Image](https://img.shields.io/docker/pulls/miatoszs/stripchat-recorder)](https://hub.docker.com/r/miatoszs/stripchat-recorder)
 
 ---
 
@@ -31,7 +27,7 @@ A self-hosted Stripchat live stream recorder with a web-based management UI. Sup
 - Dual runtime: Tauri desktop app or headless server accessible via browser
 - Real-time UI updates via Server-Sent Events with multi-client sync
 - Dark/light mode following system theme
-- Custom UI language support, see [Custom Locale Guide](docs/custom-locale.en.md)
+- Custom UI language support, see [Custom Locale Guide](docs/custom-locale.md)
 
 ---
 
@@ -42,7 +38,7 @@ A self-hosted Stripchat live stream recorder with a web-based management UI. Sup
 ```yaml
 services:
   stripchat-recorder:
-    image: chantrail/stripchat-recorder:latest
+    image: miatoszs/stripchat-recorder:latest
     container_name: stripchat-recorder
     restart: unless-stopped
     environment:
@@ -119,7 +115,7 @@ docker run -d \
   -v ./data/recordings:/app/stripchat-recorder/recordings \
   -v ./data/modules:/app/stripchat-recorder/modules \
   -v ./data/config:/app/stripchat-recorder/config \
-  chantrail/stripchat-recorder:latest
+  miatoszs/stripchat-recorder:latest
 ```
 
 ---
@@ -137,7 +133,7 @@ Modules are standalone executables implementing a simple protocol. They receive 
 | `notify_discord`  | Sends recording info and cover image to a Discord Webhook                      |
 | `notify_telegram` | Sends recording info, cover image, and video to Telegram via MTProto (supports files >2 GB, HTTP/SOCKS5 proxy) |
 
-Custom modules placed in the `modules` volume directory are discovered automatically and will not be overwritten when the container restarts. See the [Module Development Guide](docs/module-development.en.md) for details.
+Custom modules placed in the `modules` volume directory are discovered automatically and will not be overwritten when the container restarts. See the [Module Development Guide](docs/module-development.md) for details.
 
 ---
 
@@ -172,7 +168,7 @@ done
 ### Build Docker image
 
 ```bash
-docker build -t chantrail/stripchat-recorder .
+docker build -t miatoszs/stripchat-recorder .
 ```
 
 ---
